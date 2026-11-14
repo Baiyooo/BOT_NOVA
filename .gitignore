@@ -20,5 +20,8 @@ programa/pruebas/revision/*.png
 # Paquetes de actualizacion generados por EMPAQUETAR.bat
 paquetes/
 
+# Capturas del cierre de version (se regeneran; no son codigo)
+capturas_1.3/
+
 # Capturas de pruebas: traen pantallas con datos de cuenta; solo se guardan en local
 programa/pruebas/capturas/

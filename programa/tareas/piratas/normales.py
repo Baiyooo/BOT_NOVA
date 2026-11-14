@@ -1,6 +1,7 @@
 """Piratas normales del sistema, una flota por pirata."""
 from __future__ import annotations
 
+import re
 import time
 
 import cv2
@@ -9,8 +10,26 @@ import numpy as np
 from vision.detectores import barras_de_flota, buscar_cerrar_x
 from vision.plantillas import buscar_rotulo, localizar
 from vision.recursos import silueta
+from tareas.piratas import reservas
 from tareas.piratas.reparto import _Reparto
 from tareas.piratas.sigilo import PiratasSigilo
+
+
+def desplazamiento(antes, despues, minimo=0.15):
+    """Cuanto se ha movido la vista del mapa entre dos capturas: (dx, dy) en
+    pixeles (un punto que estaba en x esta ahora en x + dx), (0, 0) si no se
+    ha movido, o None si no se puede saber (pantallas muy distintas)."""
+    k = 0.25
+    a = cv2.resize(cv2.cvtColor(antes, cv2.COLOR_BGR2GRAY), None, fx=k, fy=k).astype(np.float32)
+    b = cv2.resize(cv2.cvtColor(despues, cv2.COLOR_BGR2GRAY), None, fx=k, fy=k).astype(np.float32)
+    ventana = cv2.createHanningWindow(a.shape[::-1], cv2.CV_32F)
+    (dx, dy), resp = cv2.phaseCorrelate(a, b, ventana)
+    if resp < minimo:
+        return None
+    dx, dy = dx / k, dy / k
+    if abs(dx) < 4 and abs(dy) < 4:
+        return 0.0, 0.0
+    return dx, dy
 
 
 class PiratasNormales(_Reparto, PiratasSigilo):
@@ -144,11 +163,11 @@ class PiratasNormales(_Reparto, PiratasSigilo):
         """Tras un toque en el mapa: vuelve en cuanto aparece el menu de
         seleccion (con un respiro para que termine de abrirse) o, si no
         sale, al acabar el tiempo con la ultima captura."""
-        time.sleep(0.35)
-        img = self.esperar(self.menu_abierto, segundos - 0.35, 0.2, etiqueta)
+        time.sleep(0.25)
+        img = self.esperar(self.menu_abierto, segundos - 0.25, 0.15, etiqueta)
         if img is None:
             return self.cap(etiqueta)
-        time.sleep(0.25)
+        time.sleep(0.15)             # que termine de abrirse el menu
         return self.cap(etiqueta)
 
     def _buscar_cerca(self, img):
@@ -248,12 +267,124 @@ class PiratasNormales(_Reparto, PiratasSigilo):
             self._esperar(15)
         self.log("  Tiempo de turno agotado: paso el turno.")
 
-    def un_ataque(self) -> str:
+    def _seguir_mapa(self, img):
+        """Al pulsar un pirata el juego centra el mapa en el: los piratas ya
+        atacados (apuntados por su sitio en pantalla) se mueven con el mapa.
+        Se mide cuanto se ha movido la vista desde la ultima captura y se
+        mueven igual, para no mandar una segunda flota al mismo pirata."""
+        ant, self._img_ant = getattr(self, "_img_ant", None), img
+        centro, self._centro_pend = getattr(self, "_centro_pend", None), None
+        if ant is None or ant.shape != img.shape or not self.recientes:
+            return
+        d = desplazamiento(ant, img)
+        if d is None:
+            if centro is not None:
+                self.recientes.append((centro[0], centro[1], time.time()))
+            return
+        dx, dy = d
+        self.recientes = [(x + dx, y + dy, t) for x, y, t in self.recientes]
+
+    # --- salto con UNA flota al lado del pirata (Ajustes > Piratas > Usar
+    # salto). Como en sigilo, al pirata no se puede saltar: se salta a un
+    # hueco vacio pegado a el y luego se ataca. Pero aqui solo salta la flota
+    # que va a atacar (las demas pueden estar luchando con otros piratas).
+    SALTO = False
+
+    def _salto_una_flota(self) -> bool:
+        """Dialogo «Elige tu flota» de «Movimiento en grupo»: marca SOLO la
+        primera flota libre, comprueba «Salto de flota (1/6)» y lo pulsa."""
+        img = self.esperar(lambda i: buscar_rotulo(i, "elige")[0] >= self.UMBRAL_DIALOGO, 6.0,
+                           etiqueta="dialogo_salto")
+        if img is None:
+            self.log("  No se ha abierto la eleccion de flota para el salto.")
+            return False
+        _, c_el, esc = localizar(img, "elige")
+        libres = self._tarjetas_libres(img, c_el, esc)
+        if not libres:
+            self.log("  No hay flotas libres para saltar.")
+            self.atras(img)
+            return False
+        self.ctrl.tap((libres[0], int(c_el[1] + self.DY_CARA_TARJETA * esc)))
+        time.sleep(1.0)
+        img = self.cap("salto_marcada")
+        from vision import ocr
+        texto = "".join(d["texto"] for d in ocr.leer(img, zona=(0.55, 0.62, 0.8, 0.82))).replace(" ", "")
+        ps, cs = buscar_rotulo(img, "salto")
+        po, co = buscar_rotulo(img, "ok")
+        if not re.search(r"[(\[]1/", texto) or ps < self.UMBRAL_DIALOGO or \
+                po < self.UMBRAL_DIALOGO or cs[0] >= co[0]:
+            self.log(f"  No veo «Salto de flota (1/…)» con una flota marcada ({texto}); no salto.")
+            self.atras(img)
+            return False
+        self.ctrl.tap(cs)
+        if self.esperar(lambda i: buscar_rotulo(i, "elige")[0] < 0.6, 6.0,
+                        etiqueta="salto_hecho") is None:
+            self.log("  El dialogo del salto no se cierra.")
+            return False
+        self.log("  Salto de flota: una flota al lado del pirata.")
+        return True
+
+    def _saltar_junto(self, img, donde) -> bool:
+        """Con el menu del pirata abierto (el pirata en el centro): busca un
+        hueco vacio a su lado y salta alli con la primera flota libre."""
+        cg = self._boton_grupo(img, donde)
+        if cg is None:
+            return False
+        e = localizar(img, "atacar")[2]
+        h, w = img.shape[:2]
+        centro = (w // 2, h // 2)
+        estorbos = self._estorbos(img)
+        for dx, dy in self.HUECOS:
+            hueco = (int(centro[0] + dx * w), int(centro[1] + dy * h))
+            if any((hueco[0] - ex) ** 2 + (hueco[1] - ey) ** 2 <= r ** 2 for ex, ey, r in estorbos):
+                continue
+            for _ in range(3):
+                if self.parado():
+                    return False
+                self.ctrl.tap(hueco)
+                time.sleep(1.4)
+                img2 = self.cap("hueco")
+                pm, cm, _ = localizar(img2, "movimiento")
+                if pm >= self.UMBRAL_MOVIMIENTO and abs(cm[1] - cg[1]) < 45 * e \
+                        and abs(cm[0] - cg[0]) < 140 * e:
+                    self.ctrl.tap(cm)
+                    return self._salto_una_flota()
+                if self.menu_abierto(img2):
+                    self.cerrar_menu(img2)          # otra cosa: probar otro hueco
+                    break
+        return False
+
+    def _reabrir_pirata(self, p, img_antes):
+        """Tras el salto el juego vuelve a la vista general: se mide cuanto
+        se ha movido el mapa y se toca el pirata donde esta ahora. Devuelve
+        donde esta su «Atacar» o None."""
+        if self.esperar(lambda i: localizar(i, "flota_mov")[0] < 0.70, 20.0,
+                        intervalo=1.5, etiqueta="salto_llegando") is None:
+            self.log("  La flota sigue en movimiento; sigo igualmente.")
         img = self.vista_sistema()
+        d = desplazamiento(img_antes, img) if img_antes.shape == img.shape else None
+        q = (int(p[0] + (d[0] if d else 0)), int(p[1] + (d[1] if d else 0)))
+        self.ctrl.tap(q)
+        img2 = self._esperar_menu(2.0)
+        donde = self._es_normal(img2)
+        if donde is None:
+            donde = self._buscar_cerca(img2)
+        return donde
+
+    _liberar_pend = ()
+
+    def un_ataque(self) -> str:
+        if not self._liberar_pend:
+            self._liberar_pend = []
+        self._reintentar_liberar()
+        img = self.vista_sistema()
+        self._seguir_mapa(img)
         self._limpiar_recientes()
         reclamos = self._leer_reclamos()
         pts = [p for p in self.simbolos_pirata(img)
-               if not self._reciente(p) and not self._de_otra_cuenta(p, reclamos)]
+               if not self._reciente(p) and not self._de_otra_cuenta(p, reclamos)
+               and not reservas.reservado_por_otro(
+                   self._yo(), (p[0] * 1600.0 / img.shape[1], p[1] * 1600.0 / img.shape[1]))]
         if not pts:
             return "sin_piratas"
         h, w = img.shape[:2]
@@ -290,6 +421,7 @@ class PiratasNormales(_Reparto, PiratasSigilo):
                 self.recientes[-1] = (p[0], p[1], time.time() - self.RECIENTE_SEG + 300)
                 self._recuperar(self.cap("objetivo"))
                 img = self.vista_sistema()
+                self._seguir_mapa(img)
                 continue
             self.status["encontrados"] += 1
             # comprobar otra vez justo antes de pulsar
@@ -299,15 +431,65 @@ class PiratasNormales(_Reparto, PiratasSigilo):
                 self.log("  NO ataco: la seleccion ha cambiado.")
                 self.cerrar_menu(img3)
                 continue
-            self.log("  Flota pirata comprobada: pulso Atacar (una flota).")
-            self.ctrl.tap(donde)
-            r = self._dialogo_una_flota()
-            if r == "atacado":
-                self.recientes[-1] = (p[0], p[1], time.time())   # ya va una flota
-                self._reclamar(p)              # las otras cuentas no lo atacan
-                self._ultimo_p = (p[0], p[1])
-            return r
+            # otra cuenta ya va a este pirata (flota aliada en el panel, o
+            # reserva compartida por sitio + fuerza): saltarlo
+            pos1600 = (p[0] * 1600.0 / w, p[1] * 1600.0 / w)
+            fuerza = reservas.leer_fuerza(img3)
+            if reservas.con_flota_aliada(img3):
+                self.log("  Ya lo esta atacando una flota aliada: lo salto.")
+                motivo = True
+            elif not reservas.reservar(self._yo(), pos1600, fuerza, parado=self.parado,
+                                       log=self.log):
+                self.log("  Otra cuenta ya ha reservado este pirata: lo salto.")
+                motivo = True
+            else:
+                motivo = False
+            if motivo:
+                self.recientes[-1] = (p[0], p[1], time.time() - self.RECIENTE_SEG + 90)
+                self.cerrar_menu(img3)
+                img = self.vista_sistema()
+                self._seguir_mapa(img)
+                continue
+            atacado = False
+            try:
+                if self.SALTO:
+                    # saltar con la flota al lado y volver a abrir el pirata
+                    if not self._saltar_junto(img3, donde):
+                        self.log("  No he podido saltar al lado; ataco sin salto.")
+                        self.vista_sistema()
+                    donde = self._reabrir_pirata(p, img)
+                    if donde is None:
+                        self.log("  No vuelvo a encontrar el pirata tras el salto.")
+                        self._recuperar(self.cap("objetivo"))
+                        img = self.vista_sistema()
+                        continue
+                self.log("  Flota pirata comprobada: pulso Atacar (una flota).")
+                self.ctrl.tap(donde)
+                r = self._dialogo_una_flota()
+                if r == "atacado":
+                    atacado = True
+                    self.recientes[-1] = (p[0], p[1], time.time())   # ya va una flota
+                    # el juego lo ha llevado al centro del mapa: si no se puede
+                    # medir cuanto se ha movido la vista, se apunta el centro
+                    self._centro_pend = (w // 2, h // 2)
+                    self._reclamar(p)          # las otras cuentas no lo atacan
+                    self._ultimo_p = (p[0], p[1])
+                return r
+            finally:
+                if not atacado:                # salto fallido, parado, error...: queda libre
+                    self._liberar_reserva(pos1600, fuerza)
         return "sin_piratas"
+
+    def _liberar_reserva(self, pos, fuerza):
+        """Quita la reserva propia; si no se consigue el turno del archivo, se
+        apunta y se reintenta al empezar el siguiente ataque."""
+        if not reservas.liberar(self._yo(), pos, fuerza, parado=self.parado):
+            self._liberar_pend.append((pos, fuerza))
+
+    def _reintentar_liberar(self):
+        pend, self._liberar_pend = self._liberar_pend, []
+        for pos, fuerza in pend:
+            self._liberar_reserva(pos, fuerza)
 
     def _dialogo_una_flota(self) -> str:
         """Tras "Atacar": puede salir la alerta de furia (Continuar) y luego
@@ -324,12 +506,15 @@ class PiratasNormales(_Reparto, PiratasSigilo):
                 time.sleep(1.5)
                 fin = max(fin, time.time() + 6.0)
                 continue
-            time.sleep(0.6)
+            time.sleep(0.25)
         self.log("  No ha salido la eleccion de flota.")
         self.atras()
         return "sin_dialogo"
 
-    PARAR_MISION = True          # parar al completar la mision de fuerza pirata
+    # parar al completar la mision de fuerza pirata, mirandola en Cosmomante.
+    # Solo la Rutina lo enciende, y solo si no tiene memoria de misiones; la
+    # tarea suelta nunca entra en los eventos.
+    PARAR_MISION = False
     CADA_MISION = 30 * 60
     _mision_vista = 0.0
     _mision_hecha = ""            # dia (del juego) en que se vio completa
@@ -391,7 +576,7 @@ class PiratasNormales(_Reparto, PiratasSigilo):
                     hechos += 1
                     vacios = 0
                     self.status["ciclo"] = base + hechos
-                    time.sleep(1.5)
+                    time.sleep(0.3)
                     r = self.un_ataque()
             finally:
                 self.turno_soltar()
@@ -401,7 +586,7 @@ class PiratasNormales(_Reparto, PiratasSigilo):
                 hechos += 1
                 vacios = 0
                 self.status["ciclo"] = base + hechos
-                time.sleep(2.0)
+                time.sleep(0.5)
                 continue
             if r == "flotas_ocupadas":
                 self.status["estado"] = "flotas ocupadas"

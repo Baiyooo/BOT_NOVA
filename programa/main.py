@@ -43,7 +43,7 @@ def ventana():
             _avisar_fallo(texto)
         except Exception:                           # noqa: BLE001
             _fallo_sin_ventana(texto)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
 
 if __name__ == "__main__":

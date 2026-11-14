@@ -43,7 +43,7 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
     ESPERA_INICIO_COMBATE = 300  # tope para que lleguen las flotas (viaje sin salto)
     ESPERA_MAX_COMBATE = 480     # tope total de viaje + combate
     DEFENSA = True               # retirar flotas si un jugador entra en combate
-    ESPERA_TRAS_SALTO = 3   # segundos para que las flotas lleguen tras saltar
+    ESPERA_TRAS_SALTO = 1   # segundos para que las flotas lleguen tras saltar
     DX_GRUPO, DY_GRUPO = 44, 94
     # huecos para saltar al lado del pirata (fraccion del ancho, del alto)
     HUECOS = [(0, 0.20), (0, -0.24), (-0.16, 0.08), (0, 0.32), (0.17, 0.20)]
@@ -134,7 +134,7 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
             self.atras(img)
             return "sin_ir_a"
         self.status["estado"] = "yendo al pirata"
-        time.sleep(1.5)
+        time.sleep(0.5)
         self.esperar_quieto(3.0, "carga_mapa")
 
         # 6) Buscar el pirata y confirmarlo por su cartel.
@@ -170,8 +170,15 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
                     continue
                 n += 1
                 self.ctrl.tap(punto)
-                time.sleep(1.4)
-                img = self.cap(etiqueta + "objetivo")
+                # en cuanto sale el cartel o un menu se sigue (antes: 1,4 s fijos)
+                time.sleep(0.3)
+                img = self.esperar(self._toque_resuelto, 1.1, 0.2,
+                                   etiqueta + "objetivo")
+                if img is None:
+                    img = self.cap(etiqueta + "objetivo")
+                else:
+                    time.sleep(0.15)             # que acabe de dibujarse
+                    img = self.cap(etiqueta + "objetivo")
                 parecido, c_sig, e_sig = localizar(img, "sigilo")
                 if parecido >= self.UMBRAL_SIGILO:
                     largo = self.ancho_fuerza(img, c_sig, e_sig)
@@ -200,7 +207,9 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
                     self.cerrar_menu(img)
                     time.sleep(0.6)
                     continue
-                if self.en_vista_batalla(img):
+                if (self.en_vista_batalla(img) and not self.menu_abierto(img)
+                        and self._batalla_confirmada()):
+                    img = self.cap(etiqueta + "objetivo")
                     self.vigilar_defensa(img)
                     self.log("  He abierto una batalla en curso; salgo.")
                     self.atras(img)
@@ -208,6 +217,19 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
                 else:
                     self.cerrar_menu(img)
         return None
+
+    def _batalla_confirmada(self) -> bool:
+        """Vista de batalla en dos capturas seguidas (una sola puede ser dudosa)."""
+        time.sleep(0.3)
+        return self.en_vista_batalla(self.cap("batalla_confirma"))
+
+    def _toque_resuelto(self, img) -> bool:
+        """Tras tocar el mapa: ya salio algo reconocible (cartel del sigiloso,
+        un menu o una batalla), asi que no hace falta esperar mas."""
+        ps, c, e = localizar(img, "sigilo")
+        if ps >= self.UMBRAL_SIGILO:
+            return self.ancho_fuerza(img, c, e) >= self.ANCHO_FUERZA_MIN
+        return self.menu_abierto(img)
 
     def _rematar(self, img, c_sig=None, e_sig=1.0) -> str:
         if not self.atacar:
@@ -319,8 +341,17 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
         mostrando "Ir a" con el mismo pirata, y se pulsa UNA vez.
         Antes espera a que las flotas acaben de saltar: mientras pasan por
         encima del pirata, los toques caen en ellas y no en el."""
-        if self.esperar(lambda i: localizar(i, "flota_mov")[0] < 0.70, 25.0,
-                        intervalo=1.5, etiqueta="salto_llegando") is None:
+        # primero que se vea el movimiento (max 3 s), luego dos lecturas
+        # seguidas sin el: asi no se confunde "aun no ha empezado" con "ya llego"
+        self.esperar(lambda i: localizar(i, "flota_mov")[0] >= 0.70, 3.0,
+                     intervalo=0.2, etiqueta="salto_saliendo")
+        quietas, fin = 0, time.time() + 25.0
+        while quietas < 2 and time.time() < fin and not self.parado():
+            img = self.cap("salto_llegando")
+            quietas = quietas + 1 if localizar(img, "flota_mov")[0] < 0.70 else 0
+            if quietas < 2:
+                time.sleep(0.5)
+        if quietas < 2:
             self.log("  Las flotas siguen en movimiento; sigo igualmente.")
         if not self.abrir_radar():
             return None
@@ -340,7 +371,7 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
                         etiqueta="re_ir_a") is None:
             self.atras()
             return None
-        time.sleep(1.5)
+        time.sleep(0.5)
         self.esperar_quieto(3.0, "re_carga")
         res = self._buscar_pirata("re_")
         if res is None or res == "parado":
@@ -416,9 +447,9 @@ class PiratasSigilo(_Radar, _Defensa, _EnvioFlotas, TareaBase):
                     self.status["estado"] = r
                     break
                 self.log(f"  No ha atacado ({r}); repito el ciclo {hechos + 1}.")
-                time.sleep(2.0)
+                time.sleep(1.0)
                 continue
-            time.sleep(1.5)
+            time.sleep(0.5)
         if self.status["estado"] not in ("sin_busquedas", "sin_radar") \
                 and not (fallos >= self.MAX_REINTENTOS):
             self.status["estado"] = "parado" if self.parado() else "terminado"

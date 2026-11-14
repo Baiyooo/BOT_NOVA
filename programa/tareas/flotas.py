@@ -4,7 +4,9 @@ Las flotas que acaban un ataque se quedan en el
 sistema y pueden molestar a otros jugadores; si solo estan esperando, se
 llaman de vuelta con su boton "Llamar".
 
-Donde: columna derecha de la base, el boton de debajo de "Mas" (el de la cola
+Donde: columna derecha (igual en la vista del sistema que en la de la base,
+asi que desde el sistema no se va a la estacion), el boton de debajo de
+"Mas" (el de la cola
 de construccion, lo que ponga, que cambia) abre un panel con pestañas
 Economia / Buque insignia / Flotas / Mejoras / Alianza / Nucleo. En "Flotas"
 cada fila es "POSS1 (Base)  Falom" con un boton a la derecha ("Gestionar"
@@ -23,6 +25,7 @@ import time
 import cv2
 
 from vision import ocr
+from vision.plantillas import localizar
 from vision.recursos import imagen
 from tareas.recompensas import Recompensas
 
@@ -90,25 +93,44 @@ class LlamarFlotas(Recompensas):
         self.status = {"estado": "en espera", "llamadas": 0, "recogidas": 0}
         self.desconocidos = []
 
+    def _en_sistema(self, img) -> bool:
+        """Vista del sistema (se ve el boton «Estacion espacial»)."""
+        return localizar(img, "estacion")[0] >= 0.80
+
     def _abrir_panel(self) -> bool:
-        if not self.ir_a_base():
-            return False
+        # el boton esta igual en la vista del sistema que en la de la base:
+        # desde el sistema no hace falta ir a la estacion
         img = self.cap("base_flotas")
+        self._desde_sistema = self._en_sistema(img)
+        if not self._desde_sistema:
+            if not self.ir_a_base():
+                return False
+            img = self.cap("base_flotas")
         h, w = img.shape[:2]
         # siempre en el mismo sitio: columna derecha, debajo de "Mas"
         # (medido a 1600x900: "Mas" en y=411, el boton en (1555, 485))
         punto = (int(w * 1555 / 1600), int(h * 485 / 900))
         self.ctrl.tap(punto)
-        time.sleep(2.0)
-        img = self.cap("panel_flotas")
-        items = ocr.leer(img, zona=(0.85, 0.05, 1, 0.95))
-        f = ocr.buscar(items, "flotas", zona=(0.85, 0.05, 1, 0.95), w=w, h=h)
+        # espera adaptativa: sale en cuanto se lee la pestaña Flotas (max 3 s)
+        f = None
+        time.sleep(1.0)
+        fin = time.time() + 3.0
+        while True:
+            img = self.cap("panel_flotas")
+            items = ocr.leer(img, zona=(0.85, 0.05, 1, 0.95))
+            f = ocr.buscar(items, "flotas", zona=(0.85, 0.05, 1, 0.95), w=w, h=h)
+            # el panel esta abierto de verdad solo si ademas se lee «acelerar» o «buque insignia»
+            if f is not None and self._abierto(img) is None:
+                f = None
+            if f is not None or time.time() >= fin or self.parado():
+                break
+            time.sleep(0.5)
         if f is None:
             self.log("  No se ha abierto el panel con la pestaña Flotas.")
             self._cerrar()
             return False
         self.ctrl.tap(f["centro"])
-        time.sleep(1.5)
+        time.sleep(1.0)
         return True
 
     def _abierto(self, img=None):
@@ -132,15 +154,26 @@ class LlamarFlotas(Recompensas):
             img = self.cap("cerrar_panel")
             h, w = img.shape[:2]
             que = self._abierto(img)
-            if que is None:
+            if que is None and self._cerrado_seguro(img):
                 return True
-            if que == "ficha" or i >= 2:
-                self.atras(img)                    # la tecla Atras cierra dialogos
+            if que is None:
+                time.sleep(0.6)               # el lector no ve nada claro: no es «cerrado»
+                continue
+            if que == "ficha" or i >= 2 or getattr(self, "_desde_sistema", False):
+                # la tecla Atras cierra dialogos (en el sistema, tocar fuera
+                # podria seleccionar algo del mapa)
+                self.atras(img)
             else:
                 # el panel se cierra tocando fuera, a la izquierda (la base)
                 self.ctrl.tap((int(w * 0.30), int(h * 0.55)))
-            time.sleep(1.3)
-        return self._abierto() is None
+            time.sleep(0.9)
+        img = self.cap("cerrar_panel")
+        return self._abierto(img) is None and self._cerrado_seguro(img)
+
+    def _cerrado_seguro(self, img) -> bool:
+        """Panel cerrado de verdad: el lector no ve ni panel ni ficha Y se ve la
+        base o el sistema (un OCR vacio no basta)."""
+        return self.en_base(img) or self._en_sistema(img)
 
     def _filas(self, img):
         """[(nombre, estado, boton_dict)] de la lista de flotas. boton_dict["texto"]
@@ -173,7 +206,8 @@ class LlamarFlotas(Recompensas):
             return
         self.status["estado"] = "mirando las flotas"
         if not self._abrir_panel():
-            self.volver_a_base()
+            if not getattr(self, "_desde_sistema", False):
+                self.volver_a_base()
             return
         llamadas = 0
         vacias = 0
@@ -202,5 +236,6 @@ class LlamarFlotas(Recompensas):
         if llamadas:
             self.log(f"Flotas: {llamadas} llamada(s) de vuelta a la estación.")
         self._cerrar()
-        self.volver_a_base()
+        if not getattr(self, "_desde_sistema", False):
+            self.volver_a_base()                 # desde el sistema, se queda en el sistema
         self.status["estado"] = "terminado"

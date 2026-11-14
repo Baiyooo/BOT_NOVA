@@ -23,6 +23,10 @@ class AdbController:
                  style: str = "drag"):
         self.device, self.adb_bin, self.drag_ms = device, adb, drag_ms
         self.name, self.style = device, style
+        # «Pausar» de la ventana: antes de cada toque o captura se espera aqui
+        # mientras la cuenta este en pausa (y no se haya pedido parar)
+        self.pausa = None
+        self.parada = None
         subprocess.run([adb, "connect", device], capture_output=True, timeout=20,
                        stdin=subprocess.DEVNULL, **SIN_VENTANA)
 
@@ -92,6 +96,7 @@ class AdbController:
         self._modo = min(tiempos, key=tiempos.get) if tiempos else "png"
 
     def capture(self) -> np.ndarray:
+        self.esperar_pausa()
         img = None
         if getattr(self, "_modo", None) is None:
             self._elegir_modo()
@@ -145,7 +150,14 @@ class AdbController:
         self._shell, self._cola = p, cola
         return p
 
+    def esperar_pausa(self):
+        """Mientras la cuenta este en pausa, no hace nada (ni toca ni captura)."""
+        while self.pausa is not None and self.pausa.is_set() and \
+                not (self.parada is not None and self.parada.is_set()):
+            time.sleep(0.25)
+
     def _orden(self, orden: str, espera: float = 6.0):
+        self.esperar_pausa()
         import queue
         try:
             p = self._consola()
@@ -183,6 +195,54 @@ class AdbController:
         """Tecla Atras de Android: cierra el dialogo o menu que este abierto."""
         self._orden("input keyevent 4")
 
+    # ------------------------------------------------------------- zoom --
+    #  El comando «input» de Android 7 no hace gestos de dos dedos. BlueStacks
+    #  tiene un tactil virtual («BlueStacks Virtual Touch», multitactil tipo A)
+    #  en el que el usuario de ADB puede escribir: con sendevent se simula el
+    #  pellizco (como Ctrl + rueda o las flechas del teclado en BlueStacks).
+    _tactil = None
+
+    def _dispositivo_tactil(self):
+        if self._tactil is None:
+            salida = self._adb("shell", "getevent", "-p", timeout=15).decode("utf-8", "ignore")
+            dev = ""
+            for linea in salida.splitlines():
+                if linea.startswith("add device"):
+                    dev = linea.split(":", 1)[1].strip()
+                elif "name:" in linea and "Virtual Touch" in linea:
+                    self._tactil = dev
+                    break
+            else:
+                self._tactil = ""
+        return self._tactil
+
+    def zoom(self, acercar: bool = True, centro=None, fuerza: float = 1.0, pasos: int = 7,
+             tam=(1600, 900)) -> bool:
+        """Pellizco con dos dedos en horizontal alrededor de 'centro' (por
+        defecto el centro de la pantalla). acercar=True separa los dedos
+        (amplia); False los junta (aleja). 'fuerza' (0.3-1.5) gradua cuanto.
+        Devuelve False si esta instancia no tiene tactil virtual."""
+        self.esperar_pausa()
+        dev = self._dispositivo_tactil()
+        if not dev:
+            return False
+        w, h = tam
+        cx, cy = centro if centro is not None else (w / 2, h / 2)
+        corto, largo = 140, 140 + 500 * max(0.2, min(1.5, fuerza))
+        d0, d1 = (corto, largo) if acercar else (largo, corto)
+        k = 32767
+        ordenes = []
+        for i in range(pasos + 1):
+            d = d0 + (d1 - d0) * i / pasos
+            for x in (cx - d / 2, cx + d / 2):
+                x = min(max(x, 5), w - 5)
+                ordenes += [f"sendevent {dev} 3 53 {int(x * k / w)}",
+                            f"sendevent {dev} 3 54 {int(cy * k / h)}", f"sendevent {dev} 0 2 0"]
+            ordenes.append(f"sendevent {dev} 0 0 0")
+        ordenes += [f"sendevent {dev} 0 2 0", f"sendevent {dev} 0 0 0"]   # levantar los dedos
+        self._adb("shell", " ; ".join(ordenes), timeout=30)
+        return True
+
 
 # ============================================================================
 # Descubrir BlueStacks (instancias y su ADB)
@@ -215,7 +275,8 @@ def leer_instancias() -> list[tuple[str, int]]:
     for r in RUTAS_CONF:
         if os.path.exists(r):
             try:
-                texto = open(r, encoding="utf-8", errors="replace").read()
+                with open(r, encoding="utf-8", errors="replace") as fh:
+                    texto = fh.read()
                 break
             except OSError:
                 pass
@@ -262,7 +323,8 @@ def activar_adb() -> int:
         return 1
 
     try:
-        texto = open(conf, encoding="utf-8", errors="replace").read()
+        with open(conf, encoding="utf-8", errors="replace") as fh:
+            texto = fh.read()
     except OSError as e:
         print(f"No puedo leer {conf}: {e}")
         return 1
@@ -289,7 +351,8 @@ def activar_adb() -> int:
         print("  Ajustes > Avanzado > Android Debug Bridge")
         return 1
 
-    comprobacion = open(conf, encoding="utf-8", errors="replace").read()
+    with open(conf, encoding="utf-8", errors="replace") as fh:
+        comprobacion = fh.read()
     if re.search(r'bst\.enable_adb_access="1"', comprobacion):
         print("ADB activado. (Copia del archivo original en bluestacks.conf.bak)")
         return 0

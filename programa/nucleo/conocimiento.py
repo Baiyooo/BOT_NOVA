@@ -27,8 +27,8 @@ EXPERIENCIA = "experiencia.json"
 EVENTOS = "eventos.json"
 MODELO = "novabot_det.onnx"
 #  campos de un evento que son conocimiento (lo demas es de la partida de cada uno)
-_CAMPOS_EVENTO = ("nombre", "misiones", "lector_v")
-_CAMPOS_MISION = ("id", "texto", "meta")
+_CAMPOS_EVENTO = ("nombre", "misiones", "lector_v", "info", "limpieza")
+_CAMPOS_MISION = ("id", "titulo", "texto", "meta")
 _cerrojo = threading.Lock()
 
 
@@ -82,7 +82,7 @@ def fusionar_experiencia(local: dict, llega: dict) -> dict:
                 if ant is None:
                     out[campo][k] = v
                 elif isinstance(v, list) and isinstance(ant, list):
-                    out[campo][k] = [max(a, b) for a, b in zip(ant, v)]
+                    out[campo][k] = [max(a, b) for a, b in zip(ant, v, strict=False)]
                 elif isinstance(v, (int, float)) and isinstance(ant, (int, float)):
                     out[campo][k] = max(ant, v)
     return out

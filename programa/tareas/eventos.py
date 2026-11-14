@@ -77,16 +77,107 @@ class RecogerEventos(Recompensas):
     def _cerrar_aviso(self):
         """"¡Nuevos objetos!" o la vista previa de una caja: toque arriba,
         fuera de la ventanita."""
-        time.sleep(1.5)
+        time.sleep(1.2)
         img = self.cap("aviso")
         h, w = img.shape[:2]
         self.ctrl.tap((int(w * 0.30), int(h * 0.04)))
-        time.sleep(1.0)
+        time.sleep(0.7)
+
+    # --------------------------------------------- Artefactos: «Buscar» --
+    MAX_BUSCAR = 200           # todas las que dé el encendido (tope solo por seguridad)
+
+    @staticmethod
+    def _leer_buscar(img, items):
+        """En la pantalla de Artefactos: (boton «Buscar», coste, encendido) o
+        None si no es esa pantalla. El coste va debajo de «Buscar» (20) y el
+        encendido a la derecha de «Encendido:» (235)."""
+        from vision import ocr
+        h, w = img.shape[:2]
+        b = next((d for d in items if ocr.normal(d["texto"]) == "buscar"
+                  and d["centro"][1] > h * 0.6 and d["centro"][0] < w * 0.6), None)
+        e = next((d for d in items if ocr.normal(d["texto"]).startswith("encendido")), None)
+        if b is None or e is None:
+            return None
+
+        def cifra(d):
+            t = d["texto"].replace(".", "").replace(",", "").strip()
+            return int(t) if t.isdigit() else None
+        coste = next((cifra(d) for d in items if cifra(d) is not None
+                      and abs(d["centro"][0] - b["centro"][0]) < 90 * w / 1600
+                      and 0 < d["centro"][1] - b["centro"][1] < 70 * h / 900), None)
+        energia = next((cifra(d) for d in items if cifra(d) is not None
+                        and abs(d["centro"][1] - e["centro"][1]) < 30 * h / 900
+                        and 0 < d["centro"][0] - e["centro"][0] < 300 * w / 1600), None)
+        if energia is None:
+            # el lector a veces lee mal la cifra («1n5»): se lee con las
+            # cifras de la letra del juego
+            from vision.cifras import leer_cifras
+            x0 = e["caja"][0] + e["caja"][2]
+            nums = leer_cifras(img, (x0, e["centro"][1] - int(30 * h / 900),
+                                     x0 + int(260 * w / 1600), e["centro"][1] + int(30 * h / 900)))
+            energia = nums[0] if nums else None
+        if coste is None:
+            coste = 20                                    # lo que cuesta siempre «Buscar»
+        return b, coste, energia
+
+    def buscar_artefactos(self, img=None, items=None) -> int:
+        """Artefactos: pulsa «Buscar» (cada vez canjea una recompensa) hasta
+        gastar todo el encendido. La cifra grande del encendido no se lee
+        bien (95 sale «7», «85» o «56»), asi que no se depende de ella: cada
+        toque que saca «¡Nuevos objetos!» es una busqueda hecha; si dos toques
+        seguidos no la sacan, se acabo el encendido. Si sale algo de comprar
+        o de GEC, se cierra con Atras y se para (nunca se compra encendido)."""
+        from vision import ocr
+        if img is None:
+            img = self.cap("artefactos")
+            items = ocr.leer(img)
+        n = fallos = 0
+        for _ in range(self.MAX_BUSCAR + 2):
+            if n >= self.MAX_BUSCAR or self.parado():
+                break
+            r = self._leer_buscar(img, items)
+            if r is None:
+                break
+            b, coste, energia = r
+            self.ctrl.tap(b["centro"])
+            # el aviso de la recompensa tarda un poco (la sonda va y vuelve)
+            texto = ""
+            for _espera in range(4):
+                time.sleep(1.3)
+                img = self.cap("artefactos_toque")
+                texto = " ".join(ocr.normal(d["texto"]) for d in ocr.leer(img))
+                if "objet" in texto or any(p in texto for p in ("comprar", "gec", "recargar")):
+                    break
+            if any(p in texto for p in ("comprar", "gec", "recargar", "insuficiente", "no tienes")):
+                self.log("  Artefactos: sin encendido (sale para comprar): lo cierro y paro.")
+                self.atras()
+                time.sleep(1.2)
+                break
+            if "nuevos objet" in texto or "nuevo objet" in texto:
+                n += 1
+                fallos = 0
+                self._cerrar_aviso()                      # cierra «¡Nuevos objetos!»
+            else:
+                # sin recompensa: el toque ha cerrado algo que habia encima, o
+                # no queda encendido; a la segunda se deja
+                fallos += 1
+                if fallos >= 2:
+                    break
+            img = self.cap("artefactos")
+            items = ocr.leer(img)
+        if n:
+            self.log(f"  Artefactos: «Buscar» {n} vez/veces (recompensas canjeadas).")
+            self.status["recogidas"] = self.status.get("recogidas", 0) + n
+        return n
 
     def _fuera(self, img) -> bool:
         """Base o vista del sistema: ya no estamos dentro de un evento."""
         return self.en_base(img) or self._ve(img, "estacion") is not None \
             or localizar(img, "eventos")[0] >= 0.80
+
+    def _dentro_de_evento(self, img) -> bool:
+        """Ya no se ve la lista de eventos tocada: algo ha cambiado en pantalla."""
+        return not self._fuera(img) and self._ve(img, "recompensa_ev") is None
 
     def _abrir_lista(self) -> bool:
         img = self.cap("base")
@@ -100,8 +191,13 @@ class RecogerEventos(Recompensas):
                 self.log("  No veo el boton Eventos.")
                 return False
         self.ctrl.tap((c[0], c[1] - int(img.shape[0] * 0.06)))
-        time.sleep(2.5)
-        return not self._fuera(self.cap("lista"))
+        # espera adaptativa: la lista esta abierta en cuanto se deja de ver la base
+        # y es la lista: ya se ve alguna fila con ¡RECOMPENSA! (o la pantalla quieta)
+        img = self.esperar(lambda i: not self._fuera(i), 3.5, intervalo=0.5, etiqueta="lista")
+        if img is None:
+            return False
+        img = self.esperar_quieto(2.5, etiqueta="lista", intervalo=0.2)
+        return img is not None and not self._fuera(img)
 
     def _salir(self, maximo=5):
         """Cierra ventanas con su X hasta volver a la base o al sistema."""
@@ -114,7 +210,7 @@ class RecogerEventos(Recompensas):
                 self.volver_a_base()
                 return True
             self.ctrl.tap(x)
-            time.sleep(1.8)
+            self.esperar(self._fuera, 1.8, intervalo=0.4, etiqueta="salir")
         return self._fuera(self.cap("salir"))
 
     # ---------------------------------------------------------- un evento --
@@ -134,7 +230,7 @@ class RecogerEventos(Recompensas):
                 return (int(x - 330 * k), int(y + 45 * k))
             antes = img
             self.ctrl.drag((int(w * 0.55), int(h * 0.78)), (int(w * 0.55), int(h * 0.38)))
-            time.sleep(1.2)
+            time.sleep(0.9)
             if _diferencia(antes, self.cap("lista")) < 2.0:
                 break                    # fin de la lista
         return None
@@ -159,7 +255,7 @@ class RecogerEventos(Recompensas):
         cajas_hechas = set()
         agotados = set()          # botones Recoger que no hacen nada
         bajadas = {}
-        n = 0
+        n = self.buscar_artefactos()        # Artefactos: «Buscar» con el encendido que haya
         for _ in range(self.MAX_PASOS):
             if self.parado():
                 break
@@ -314,7 +410,8 @@ class RecogerEventos(Recompensas):
             hechos.add(clave)
             self.log(f"  {texto}: tiene aviso, entro.")
             self.ctrl.tap(c)
-            time.sleep(2.8)
+            if self.esperar(self._dentro_de_evento, 3.5, intervalo=0.4, etiqueta="evento") is not None:
+                self.esperar_quieto(3.0, etiqueta="evento", intervalo=0.2)
             try:
                 r = self._dentro()
             except Exception as e:                       # noqa: BLE001
@@ -346,7 +443,10 @@ class RecogerEventos(Recompensas):
                 self._salir()
                 break
             self.ctrl.tap(punto)
-            time.sleep(2.8)
+            estable = self.esperar(self._dentro_de_evento, 3.5, intervalo=0.4,
+                                   etiqueta="evento") is not None
+            if estable:
+                self.esperar_quieto(3.0, etiqueta="evento", intervalo=0.2)
             self.status["eventos"] += 1
             self.status["estado"] = f"evento {self.status['eventos']}"
             try:
@@ -356,7 +456,8 @@ class RecogerEventos(Recompensas):
                 n = 0
             self.status["recogidas"] += n
             self.log(f"  Evento {self.status['eventos']}: {n} recompensa(s).")
-            if n == 0 and getattr(self, "_mini_actual", None) is not None:
+            # solo se descarta 20 h si se vio el evento abierto y estable
+            if n == 0 and estable and getattr(self, "_mini_actual", None) is not None:
                 self._apuntar_sin_nada(self._mini_actual)   # no volver hoy
             self._salir()
         if not self.parado():

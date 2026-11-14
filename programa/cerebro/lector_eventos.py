@@ -1,7 +1,9 @@
 """Lee en el juego la lista de eventos (con su cuenta atras) y, una sola vez
-por evento, sus misiones. Solo lectura: los unicos toques son abrir la lista,
-abrir un evento por su nombre, el boton de misiones del evento y la X para
-salir. Nunca pulsa Recoger, Comprar, Ir a, Bot estelar ni nada parecido."""
+por evento, sus misiones. Los unicos toques son abrir la lista, abrir un
+evento por su nombre, el boton de misiones del evento, la X para salir y,
+al mirar las misiones, los botones verdes «Recoger» de las misiones ya
+cumplidas (dan la recompensa; no gastan nada). Nunca pulsa Comprar, Ir a,
+Bot estelar ni nada parecido."""
 from __future__ import annotations
 
 import difflib
@@ -13,9 +15,12 @@ import cv2
 
 from vision import ocr
 from tareas.eventos import RecogerEventos
-from cerebro.memoria_eventos import (Memoria, clave, nombre_tarjeta, progreso, segundos,
-                                     sin_acentos, subtitulos_de, SIN_MISIONES)
+from cerebro import textos_mision as tm
+from cerebro.memoria_eventos import (Memoria, clasificar, clave, nombre_tarjeta, progreso,
+                                     segundos, sin_acentos, subtitulos_de, ignorado,
+                                     SIN_MISIONES)
 from nucleo.rutas import carpeta_diag, podar
+from vision.plantillas import localizar, localizar_todos
 
 ESTADOS = ("abierto", "activo", "proximamente", "finalizado", "terminado", "cerrado")
 # Botones que llevan a la lista de misiones de un evento (lo unico que se toca dentro)
@@ -121,14 +126,30 @@ def misiones(items, alto=900, ancho=1600) -> list[dict]:
         textos.append(d)
     if not textos:
         return []
-    bordes = {}
-    for d in textos:
-        bk = int(d["caja"][0] // (20 * k))
-        bordes[bk] = bordes.get(bk, 0) + 1
-    col = max(bordes, key=bordes.get) * 20 * k
+    # la columna donde empiezan los textos de las tarjetas: la x con mas
+    # textos cerca (sin contar la cabecera ni el pie de la pantalla)
+    cuerpo = [d for d in textos if alto * 0.17 < d["centro"][1] < alto * 0.86] or textos
+    col = max((d["caja"][0] for d in cuerpo),
+              key=lambda x: sum(1 for e in cuerpo if abs(e["caja"][0] - x) <= 20 * k))
     textos = [d for d in textos if abs(d["caja"][0] - col) <= 45 * k]
     textos.sort(key=lambda d: d["caja"][1])
     out = []
+    # cuando el lector no lee bien los botones («Ir a» sale «eJI», o una
+    # pestaña de arriba parece un boton) pero cada tarjeta lleva su
+    # «Progreso: x / y» debajo, las tarjetas se separan por esa linea
+    progs.sort()
+    if len(progs) >= 2 and len(progs) > len([b for b in botones if b[0] > alto * 0.2]):
+        previo = 0.0
+        for py, p in progs:
+            lineas = [d["texto"] for d in textos
+                      if previo < d["centro"][1] <= py + 12 * k and d["centro"][1] > alto * 0.18]
+            texto = re.sub(r"\s+", " ", " ".join(lineas)).strip()
+            hecha = any(e == "hecha" for by, e in botones if previo < by <= py + 12 * k
+                        and by > alto * 0.2)
+            if len(sin_acentos(texto)) >= 8:
+                out.append({"texto": texto, "progreso": p, "hecha": hecha or p[0] >= p[1]})
+            previo = py + 12 * k
+        return out
     if len(botones) >= 1:
         botones.sort()
         alto_tarjeta = (botones[1][0] - botones[0][0]) if len(botones) > 1 else 150 * k
@@ -162,15 +183,17 @@ def misiones(items, alto=900, ancho=1600) -> list[dict]:
 
 
 def boton_misiones(items):
-    """El texto-boton que abre las misiones del evento (o None). Nunca
-    "Bote estelar", "Mejorar bote" ni nada parecido."""
+    """El texto-boton que abre las misiones del evento (o None): «Misiones
+    del evento», «Mision de Cosmomante» o, en Artefactos, «Añadir potencia».
+    Nunca "Bote estelar", "Mejorar bote" ni nada parecido."""
     for d in items:
         t = ocr.normal(d["texto"])
         if len(t) > 26 or "bote" in t:
             continue
         if ocr.coincide(t, "misiones del evento") or ocr.coincide(t, "event missions") \
                 or t.startswith("misiones del") or t.startswith("mision del") \
-                or t in ("misiones", "event mission", "misiones de evento"):
+                or t in ("misiones", "event mission", "misiones de evento") \
+                or ocr.coincide(t, "mision de cosmomante") or t in ("mision de", "misiones de")                 or ocr.coincide(t, "anadir potencia") or t.startswith("anadir pot"):   # Artefactos
             return d
     return None
 
@@ -185,12 +208,39 @@ class LectorEventos(RecogerEventos):
     de abrir la lista y de salir con la X."""
 
     NOMBRE = "Lectura de eventos"
-    MAX_SCROLL = 6
+    MAX_SCROLL = 10
 
     def __init__(self, ctrl, log=None, stop=None, diag=True):
         super().__init__(ctrl, log=log, stop=stop, diag=diag)
         self.mem = Memoria(getattr(ctrl, "name", "inst"))
-        self.status = {"estado": "en espera", "eventos": 0, "leidos": 0}
+        self.status = {"estado": "en espera", "eventos": 0, "leidos": 0, "recogidas": 0}
+
+    MAX_RECOGER = 12          # como mucho, botones Recoger por pantalla de misiones
+
+    def _recoger_visibles(self, nombre) -> int:
+        """Pulsa los botones verdes «Recoger» de la lista de misiones abierta
+        (misiones cumplidas con la recompensa sin recoger), de arriba abajo.
+        Un boton que no cambia nada al pulsarlo no se vuelve a pulsar."""
+        n, agotados = 0, set()
+        for _ in range(self.MAX_RECOGER):
+            if self.parado():
+                break
+            img = self.cap("misiones_recoger")
+            botones = [c for _, c in localizar_todos(img, "recoger_ev", self.U_RECOGER)
+                       if (c[0] // 30, c[1] // 30) not in agotados]
+            if not botones:
+                break
+            c = min(botones, key=lambda c: c[1])
+            self.ctrl.tap(c)
+            self._cerrar_aviso()                     # «¡Nuevos objetos!»
+            if self._sin_cambio(img, self.cap("misiones_recoger"), c):
+                agotados.add((c[0] // 30, c[1] // 30))
+                continue
+            n += 1
+        if n:
+            self.log(f"  «{nombre}»: {n} recompensa(s) de misiones recogida(s).")
+            self.status["recogidas"] += n
+        return n
 
     def _guardar_muestra(self, img, nombre):
         """Captura para revisar luego como son las pantallas de misiones."""
@@ -217,9 +267,18 @@ class LectorEventos(RecogerEventos):
         return "lista de eventos" in t or ("edit pin" in t and any(e in t for e in ESTADOS))
 
     def _arrastrar(self, img, abajo=True):
+        """Mueve la lista algo mas de una tarjeta, despacio: un arrastre rapido
+        le da inercia y se salta tarjetas (Artefactos, Bingo Estelar...)."""
         h, w = img.shape[:2]
-        y0, y1 = (0.78, 0.38) if abajo else (0.38, 0.78)
-        self.ctrl.drag((int(w * 0.62), int(h * y0)), (int(w * 0.62), int(h * y1)))
+        y0, y1 = (0.72, 0.45) if abajo else (0.45, 0.72)
+        ms = getattr(self.ctrl, "drag_ms", None)
+        try:
+            if ms is not None:
+                self.ctrl.drag_ms = 900
+            self.ctrl.drag((int(w * 0.62), int(h * y0)), (int(w * 0.62), int(h * y1)))
+        finally:
+            if ms is not None:
+                self.ctrl.drag_ms = ms
         time.sleep(1.3)
 
     def leer_lista(self) -> list[dict]:
@@ -249,9 +308,40 @@ class LectorEventos(RecogerEventos):
             self._arrastrar(img, abajo=False)
         return todas
 
+    def _entrar_tarjeta(self, centro, nombre, segundos=12.0):
+        """Toca la tarjeta y espera a que cargue el evento. Al entrar sale una
+        animacion de rayas sin texto, y algunos eventos tardan en abrir: se
+        espera a ver texto que no sea la lista. Si la lista sigue ahi pasados
+        unos segundos, el toque no ha entrado: se vuelve a buscar la tarjeta
+        por su nombre (la lista puede haberse movido) y se toca otra vez (una
+        sola). Sin texto al acabar el tiempo no se da por abierto."""
+        self.ctrl.tap(centro)
+        time.sleep(2.0)
+        fin, retocado, lista_desde = time.time() + segundos, False, None
+        img2 = items2 = None
+        while time.time() < fin and not self.parado():
+            img2, items2 = self._ocr("evento_ocr")
+            if self._lista_abierta(items2):
+                lista_desde = lista_desde or time.time()
+                if not retocado and time.time() - lista_desde >= 2.5:
+                    retocado, lista_desde = True, None
+                    t = next((t for t in tarjetas(items2, img2.shape[1])
+                              if parecida(t["nombre"], nombre) >= 0.8
+                              or nombre_tarjeta(t, [nombre]) == nombre), None)
+                    if t is None:
+                        return None                  # la tarjeta ya no esta a la vista
+                    self.ctrl.tap(t["centro"])
+            elif len([d for d in items2 if len(d["texto"].strip()) >= 3]) >= 3:
+                return img2, items2                  # pantalla del evento con su texto
+            time.sleep(1.0)
+        return None
+
     def _abrir_evento(self, nombre):
-        """Busca la tarjeta por su nombre (bajando la lista) y la abre."""
-        for _ in range(self.MAX_SCROLL + 1):
+        """Busca la tarjeta por su nombre y la abre. La lista recuerda donde se
+        quedo: se busca bajando y, si se llega al final sin verla, subiendo."""
+        from vision.detectores import _diferencia
+        abajo, cambios = True, 0
+        for _ in range(2 * self.MAX_SCROLL + 2):
             if self.parado():
                 return None
             img, items = self._ocr("busco_evento")
@@ -261,17 +351,30 @@ class LectorEventos(RecogerEventos):
                 continue
             for t in tarjetas(items, img.shape[1]):
                 if parecida(t["nombre"], nombre) >= 0.8 or nombre_tarjeta(t, [nombre]) == nombre:
-                    self.ctrl.tap(t["centro"])
-                    time.sleep(3.0)
-                    img2, items2 = self._ocr("evento_ocr")
-                    return None if self._lista_abierta(items2) else (img2, items2)
-            self._arrastrar(img, abajo=True)
+                    return self._entrar_tarjeta(t["centro"], nombre)
+            self._arrastrar(img, abajo=abajo)
+            if _diferencia(img, self.cap("busco_evento")) < 2.0:     # final de la lista
+                cambios += 1
+                if cambios >= 2:
+                    break
+                abajo = not abajo
         return None
 
     def _leer_misiones_abiertas(self, nombre, img, items):
         """Dentro del evento: abre sus misiones (si tiene boton) y las lee
         bajando la lista. Devuelve [{"texto", "progreso"}]."""
+        # Artefactos: antes de nada, «Buscar» con el encendido que haya
+        if self.buscar_artefactos(img, items):
+            img, items = self._ocr("evento_ocr")
+        # misiones que ya se conocen y no hace falta volver a mirar
+        if getattr(self, "sin_misiones", False):
+            return []
         b = boton_misiones(items)
+        if b is None:
+            # Cosmomante: el boton «Mision de Cosmomante» (copa) del tablero
+            p, c, _ = localizar(img, "mision_cosmo")
+            if p >= 0.85:
+                b = {"texto": "Misión de Cosmomante", "centro": c}
         if b is not None:
             self.log(f"  Abro «{b['texto']}».")
             self.ctrl.tap(b["centro"])
@@ -281,7 +384,8 @@ class LectorEventos(RecogerEventos):
             img, items = self._ocr("misiones_ocr", escala=1.6)
         self._guardar_muestra(img, nombre)
         todas, firmas = [], set()
-        for _ in range(4):
+        relecturas = 0
+        for _ in range(6):
             firma = " ".join(sin_acentos(d["texto"]) for d in items)
             if firma in firmas:
                 break
@@ -303,6 +407,12 @@ class LectorEventos(RecogerEventos):
                     igual["progreso"] = m["progreso"]
             if self.parado():
                 break
+            # recoger lo cumplido de esta pantalla y volver a mirarla (las
+            # misiones recogidas pueden bajar al final de la lista)
+            if self._recoger_visibles(nombre) and relecturas < 2:
+                relecturas += 1
+                img, items = self._ocr("misiones_ocr", escala=1.6)
+                continue
             self._arrastrar(img, abajo=True)
             img, items = self._ocr("misiones_ocr", escala=1.6)
         return todas
@@ -310,12 +420,43 @@ class LectorEventos(RecogerEventos):
     def _apuntar(self, k, leidas):
         """Guarda el progreso leido de cada mision (busca la mision guardada
         mas parecida)."""
+        ev = self.mem.eventos().get(k) or {}
+        guardadas = ev.get("misiones") or []
+        # lo leido, puesto en limpio igual que lo guardado (una tarjeta leida
+        # junto con otra se reparte: el progreso va a la que tiene esa meta)
+        limpias, _ = tm.ordenar([m["texto"] for m in leidas], ev.get("nombre", ""),
+                                ev.get("subtitulo", ""))
+
+        def misma(g, x):
+            """Mision guardada g y leida x: mismo titulo (y lo guardado es un
+            trozo de lo leido) o textos muy parecidos."""
+            tg, tx = sin_acentos(g.get("titulo") or ""), sin_acentos(x.get("titulo") or "")
+            if tg and tg == tx and not g.get("texto"):
+                return True                       # guardada solo con el titulo
+            # con cifras distintas no es la misma («Gasta 2.000» / «Gasta 10.000 GEC»)
+            if clasificar(tm.completo(g))["meta"] != clasificar(tm.completo(x))["meta"]:
+                return False
+            return parecida(tm.completo(g), tm.completo(x)) >= 0.75
+
+        # completar las misiones que se guardaron a medias
+        for x in limpias:
+            g = next((g for g in guardadas if misma(g, x)), None)
+            if g is not None and self.mem.mejorar_mision(k, g["id"], x["titulo"], x["texto"]):
+                self.log(f"  Misión completada en la memoria: «{tm.completo(x)}».")
         guardadas = (self.mem.eventos().get(k) or {}).get("misiones") or []
-        for m in leidas:
+        for i, m in enumerate(leidas):
             if not m["progreso"] and not m.get("hecha"):
                 continue
-            mejor = max(guardadas, key=lambda g: parecida(g["texto"], m["texto"]), default=None)
-            if mejor and parecida(mejor["texto"], m["texto"]) >= 0.75:
+            trozos = [tm.completo(x) for x in limpias if x["origen"] == i] or [m["texto"]]
+            if m["progreso"] and len(trozos) > 1:
+                meta = m["progreso"][1]
+                trozos = [t for t in trozos if clasificar(t)["meta"] == meta] or trozos[:1]
+            texto = trozos[0]
+            pieza = next((x for x in limpias if x["origen"] == i and tm.completo(x) == texto),
+                         {"titulo": "", "texto": texto})
+            mejor = next((g for g in guardadas if misma(g, pieza)), None) or \
+                max(guardadas, key=lambda g: parecida(tm.completo(g), texto), default=None)
+            if mejor and (misma(mejor, pieza) or parecida(tm.completo(mejor), texto) >= 0.75):
                 actual, meta = m["progreso"] or (None, None)
                 self.mem.apuntar_progreso(k, mejor["id"], actual, meta, hecha=m.get("hecha"))
 
@@ -331,11 +472,15 @@ class LectorEventos(RecogerEventos):
             leidas = self._leer_misiones_abiertas(nombre, *r)
         finally:
             self._salir_a_lista()
-        if guardar_requisitos:
-            ms = self.mem.guardar_misiones(k, [m["texto"] for m in leidas])
+        from cerebro.memoria_eventos import LEER_UNA_VEZ
+        una_vez = k in LEER_UNA_VEZ
+        if guardar_requisitos or (una_vez and leidas):
+            ms = self.mem.guardar_misiones(k, [m["texto"] for m in leidas], sumar=una_vez)
             bot = sum(1 for m in ms if m["accion"] == "bot")
             self.log(f"  «{nombre}»: {len(ms)} misión(es), {bot} las hace el bot.")
         self._apuntar(k, leidas)
+        if una_vez and leidas:
+            self.mem.marcar_misiones_leidas(k)       # esta cuenta ya no las vuelve a leer
         self.mem.apuntar_lectura(k)
         return True
 
@@ -353,8 +498,10 @@ class LectorEventos(RecogerEventos):
     # ------------------------------------------------------------- tareas --
     #  al empezar, como mucho se mira el progreso de estos eventos (no tardar mucho)
     MAX_PROGRESO_INICIO = 6
-    #  no se vuelve a mirar el progreso de un evento si se miro hace menos de esto
-    PROGRESO_RECIENTE = 30 * 60
+    #  no se vuelve a mirar el progreso de un evento si se miro hace menos de
+    #  esto: 1 h si le falta algo; 6 h si ya esta todo completado
+    PROGRESO_RECIENTE = 3600
+    PROGRESO_COMPLETO = 6 * 3600
 
     def run(self, ciclos: int = 1, solo: str | None = None, progreso_cuenta: bool = False):
         """Lee la lista; lee las misiones de los eventos nuevos (una vez) y,
@@ -382,7 +529,7 @@ class LectorEventos(RecogerEventos):
         for t in lista:
             t["pantalla"] = t["nombre"]
             t["nombre"] = nombre_tarjeta(t, sabidos, subs) or ""
-        lista = [t for t in lista if t["nombre"]]
+        lista = [t for t in lista if t["nombre"] and not ignorado(clave(t["nombre"]))]
         self.status["eventos"] = len(lista)
         self.log("Eventos: " + ", ".join(f"{t['nombre']} ({t['tiempo']})" for t in lista))
         for t in lista:
@@ -401,13 +548,18 @@ class LectorEventos(RecogerEventos):
                 self.status["estado"] = f"progreso de {t['nombre']}"
                 self.leer_evento(k, t["pantalla"], guardar_requisitos=False, mostrar=t["nombre"])
         if progreso_cuenta and not self.parado():
+            # todos los eventos con misiones (para recoger lo cumplido); los
+            # que tienen misiones del bot, primero
             con_bot = set(self.mem.con_misiones_del_bot())
+            con_mis = set(self.mem.con_misiones())
+            pendientes = {p["evento"] for p in self.mem.pendientes()}
             vistos = 0
-            for t in lista:
+            for t in sorted(lista, key=lambda t: clave(t["nombre"]) not in con_bot):
                 k = clave(t["nombre"])
                 if self.parado() or vistos >= self.MAX_PROGRESO_INICIO:
                     break
-                if k not in con_bot or time.time() - self.mem.leido_t(k) < self.PROGRESO_RECIENTE:
+                espera = self.PROGRESO_RECIENTE if k in pendientes else self.PROGRESO_COMPLETO
+                if k not in con_mis or time.time() - self.mem.leido_t(k) < espera:
                     continue
                 self.status["estado"] = f"progreso de {t['nombre']}"
                 self.log(f"  Miro cómo va esta cuenta en «{t['nombre']}».")
@@ -417,16 +569,38 @@ class LectorEventos(RecogerEventos):
         self.volver_a_base()
         self.status["estado"] = "terminado"
 
-    def progreso_de(self, k: str):
-        """Solo vuelve a leer el progreso de un evento ya conocido."""
-        ev = self.mem.eventos().get(k)
-        if not ev or not ocr.disponible():
-            return
+    def jugar_evento(self, k: str, nombre: str) -> bool:
+        """Paso de la Rutina para un evento (Artefactos, Bingo Estelar...):
+        entra, hace lo suyo (en Artefactos, «Buscar» con todo el encendido),
+        lee las misiones (la primera vez las guarda), recoge las cumplidas y
+        vuelve a la base."""
+        if not ocr.disponible():
+            return False
+        ev = self.mem.eventos().get(k) or {}
         if not self.ir_a_base() or not self._abrir_lista():
-            return
-        self.leer_evento(k, ev.get("nombre", k), guardar_requisitos=False)
+            return False
+        from cerebro.memoria_eventos import LEER_UNA_VEZ
+        # cada cuenta lee una vez SUS misiones (cada una ve las que le quedan)
+        self.sin_misiones = k in LEER_UNA_VEZ and self.mem.misiones_leidas(k)
+        hecho = self.leer_evento(k, ev.get("nombre") or nombre,
+                                 guardar_requisitos=self.mem.necesita_leer(k) or not ev.get("misiones"),
+                                 mostrar=nombre)
         self._salir()
         self.volver_a_base()
+        return hecho
+
+    def progreso_de(self, k: str) -> bool:
+        """Solo vuelve a leer el progreso de un evento ya conocido. Devuelve
+        si se ha podido leer."""
+        ev = self.mem.eventos().get(k)
+        if not ev or not ocr.disponible():
+            return False
+        if not self.ir_a_base() or not self._abrir_lista():
+            return False
+        ok = self.leer_evento(k, ev.get("nombre", k), guardar_requisitos=False)
+        self._salir()
+        self.volver_a_base()
+        return bool(ok)
 
 
 def segundos_fin(t) -> int | None:            # atajo para pruebas

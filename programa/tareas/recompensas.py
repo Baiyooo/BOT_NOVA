@@ -78,10 +78,12 @@ class Recompensas(TareaBase):
                 break                     # mapa sin boton Base a la vista: no insistir
             else:
                 self.atras(img)
-            time.sleep(1.5)
-            img = self.cap("inicio")
-            if self.en_base(img):
+            # espera adaptativa: sale en cuanto se ve la base
+            img = self.esperar(self.en_base, 1.5, intervalo=0.3, etiqueta="inicio")
+            # dos capturas seguidas con la base antes de darla por buena
+            if img is not None and self.en_base(self.cap("inicio")):
                 return True
+            img = self.cap("inicio")
         if self.en_base(self.cap("inicio")):
             return True
         return self._base_por_texto()
@@ -102,7 +104,7 @@ class Recompensas(TareaBase):
                 return True
             h, w = img.shape[:2]
             items = ocr.leer(img)
-            def busca(fr, zona):
+            def busca(fr, zona, items=items, w=w, h=h):
                 return ocr.buscar(items, fr, zona=zona, w=w, h=h)
             if busca("seguro que quieres salir", (0, 0, 1, 1)):
                 d = busca("no", (0.2, 0.5, 0.5, 0.8))
@@ -130,7 +132,7 @@ class Recompensas(TareaBase):
         en la base, Atras abriria el aviso de salir del juego."""
         esperas = 0
         for _ in range(intentos + 3):
-            time.sleep(1.0)
+            time.sleep(0.6)
             img = self.cap("cerrar")
             if self.en_base(img):
                 return True
@@ -155,11 +157,11 @@ class Recompensas(TareaBase):
 
     def quitar_aviso(self):
         """Tras recoger sale "¡Nuevos objetos!": un toque en el centro lo cierra."""
-        time.sleep(1.8)
+        time.sleep(1.4)
         img = self.cap("aviso")
         h, w = img.shape[:2]
         self.ctrl.tap((w // 2, int(h * 0.55)))
-        time.sleep(1.2)
+        time.sleep(0.8)
 
     # ------------------------------------------------------------ pasos --
     def _icono_gratis(self, img):
@@ -230,7 +232,10 @@ class Recompensas(TareaBase):
                 self.ctrl.tap((int(c[0] + self.DX_GRATIS * e), int(c[1] - h * 0.055)))
         img = self.esperar(lambda i: self._ve(i, "recoger_nar") is not None, 4.0,
                            etiqueta="gratis")
-        if img is None:
+        if img is not None:
+            # el dialogo se anima: pulsar el boton ya quieto
+            img = self.esperar_quieto(2.0, etiqueta="gratis", intervalo=0.2)
+        if img is None or self._ve(img, "recoger_nar") is None:
             self.log("  ¡GRATIS!: aun no esta disponible (tiene temporizador).")
             self.volver_a_base()
             return False
@@ -240,7 +245,7 @@ class Recompensas(TareaBase):
         self.log("  ¡GRATIS!: suministros recogidos.")
         self.volver_a_base()
         try:
-            time.sleep(1.0)
+            time.sleep(0.5)
             self.status["gratis_espera"] = self.gratis_restante() or 0
         except Exception:                                # noqa: BLE001
             self.status["gratis_espera"] = 0
@@ -258,9 +263,10 @@ class Recompensas(TareaBase):
         if img is None:
             self.log("  No se ha abierto la recompensa diaria.")
             return
-        time.sleep(0.8)
-        img = self.cap("login")
-        c = self._ve(img, "login")
+        # espera adaptativa: sale en cuanto sale el boton de recoger
+        img = self.esperar(lambda i: self._ve(i, "login") is not None, 2.5,
+                           intervalo=0.4, etiqueta="login")
+        c = self._ve(img, "login") if img is not None else None
         if c is None:
             self.log("  Recompensa diaria: ya recogida hoy.")
         else:
@@ -279,7 +285,7 @@ class Recompensas(TareaBase):
         if self.esperar(lambda i: not self.en_base(i), 5.0, etiqueta="diarias") is None:
             self.log("  No se han abierto las Tareas diarias.")
             return
-        time.sleep(1.0)
+        time.sleep(0.6)
         n, pasadas = 0, 0
         while n < 15 and pasadas < 5 and not self.parado():
             img = self.cap("diarias")
@@ -293,7 +299,7 @@ class Recompensas(TareaBase):
             h, w = img.shape[:2]
             antes = img
             self.ctrl.drag((int(w * 0.45), int(h * 0.80)), (int(w * 0.45), int(h * 0.40)))
-            time.sleep(1.2)
+            time.sleep(0.9)
             pasadas += 1
             if _diferencia(antes, self.cap("diarias")) < 2.0:
                 break                      # fin de la lista
@@ -318,10 +324,13 @@ class Recompensas(TareaBase):
         for x, y in self.CAJAS_DIARIAS:
             if self.parado():
                 break
+            antes = self.cap("cajas")
             self.ctrl.tap((int(x * kx), int(y * ky)))
-            time.sleep(1.5)
+            # la lista de la caja sale con animacion: esperar a que cambie y se quede quieta
+            self.esperar_cambio(antes, 1.5, etiqueta="cajas")
+            self.esperar_quieto(1.5, etiqueta="cajas", intervalo=0.2)
             self.ctrl.tap((int(w * 0.30), int(h * 0.04)))      # cerrar lo que salga
-            time.sleep(1.0)
+            time.sleep(0.6)
         self.log("  Cajas de puntos diarios y semanales revisadas.")
 
     def run(self, ciclos: int = 1):
@@ -387,10 +396,15 @@ class Simulacion(Recompensas):
             if img is None:
                 self.log("  No encuentro Simulacion en el menu lateral.")
                 return False
+            # el menu se desliza: esperar a que quede quieto antes de pulsar el icono
+            img = self.esperar_quieto(2.0, etiqueta="mas_lado", intervalo=0.2)
             p, c, _ = localizar(img, "simulacion")
+            if p < 0.85:
+                self.log("  No encuentro Simulacion en el menu lateral.")
+                return False
         self.ctrl.tap((c[0], c[1] - int(img.shape[0] * 0.055)))   # el icono, encima del texto
-        time.sleep(3.0)
-        return localizar(self.cap("simulacion"), "atras")[0] >= 0.72
+        return self.esperar(lambda i: localizar(i, "atras")[0] >= 0.72, 4.0,
+                            intervalo=0.4, etiqueta="simulacion") is not None
 
     def _coste_cero(self, img, c) -> bool:
         """El coste va debajo del boton: icono de GEC y la cifra. Solo vale un 0."""
@@ -416,13 +430,12 @@ class Simulacion(Recompensas):
             self.status["estado"] = "sin_simulacion"
             self.volver_a_base()
             return
-        # ir al principio de la lista y recorrerla hacia la derecha
+        # recorrer la lista desde donde se abre, siempre hacia la DERECHA
+        # (nunca hacia la izquierda: ahi estan los capitulos ya hechos)
         img = self.cap("sim")
         h, w = img.shape[:2]
-        for _ in range(4):
-            self.ctrl.drag((int(w * 0.25), int(h * 0.5)), (int(w * 0.75), int(h * 0.5)))
-            time.sleep(0.8)
-        for paso in range(10):
+        antes = None
+        for paso in range(14):
             if self.parado():
                 break
             img = self.cap("sim")
@@ -432,17 +445,35 @@ class Simulacion(Recompensas):
                     self.log("  Simulacion automatica (0 GEC).")
                     self.ctrl.tap(c)
                     hechas += 1
-                    time.sleep(4.0)
-                    # cerrar el resultado si sale algo encima
-                    img = self.cap("sim_hecha")
-                    x = buscar_cerrar_x(img)
+                    # cerrar el resultado si sale algo encima (sale en cuanto aparece)
+                    # la X vale solo si es del popup nuevo (no estaba ya antes del toque)
+                    x_antes = buscar_cerrar_x(img)
+                    self.esperar_cambio(img, 4.0, etiqueta="sim_hecha")
+                    nueva = self.esperar_quieto(3.0, etiqueta="sim_hecha", intervalo=0.2)
+                    x = buscar_cerrar_x(nueva) if nueva is not None and x_antes is None else None
                     if x is not None:
                         self.ctrl.tap(x)
-                        time.sleep(1.5)
+                        time.sleep(1.0)
                     continue
                 self.log("  Hay una simulacion pero cuesta GEC: no la hago.")
-            self.ctrl.drag((int(w * 0.70), int(h * 0.5)), (int(w * 0.40), int(h * 0.5)))
-            time.sleep(1.0)
+            # final de la lista: la pantalla ya no cambia al desplazar
+            if antes is not None and float(np.abs(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.int16)
+                                                   - antes).mean()) < 2.0:
+                break
+            antes = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.int16)
+            # el dedo de derecha a izquierda: la lista avanza hacia la derecha.
+            # Arrastre lento y menor que una tarjeta (~480 px): rapido, la
+            # inercia se salta el capitulo de hoy (pasaba de verlo cortado a
+            # la derecha a verlo cortado a la izquierda)
+            lento = getattr(self.ctrl, "drag_ms", None)
+            try:
+                if lento is not None:
+                    self.ctrl.drag_ms = 1100
+                self.ctrl.drag((int(w * 0.65), int(h * 0.5)), (int(w * 0.42), int(h * 0.5)))
+            finally:
+                if lento is not None:
+                    self.ctrl.drag_ms = lento
+            time.sleep(0.9)
         self.status["recogidas"] = self.status.get("recogidas", 0) + hechas
         self.log(f"Simulacion: {hechas} hecha(s).")
         # salir con su boton Atras (nunca Atras de Android en la base)
@@ -453,7 +484,7 @@ class Simulacion(Recompensas):
             p, c = buscar_rotulo(img, "atras")
             if p >= 0.72:
                 self.ctrl.tap(c)
-                time.sleep(2.0)
+                self.esperar(self.en_base, 2.0, intervalo=0.4, etiqueta="salir")
             else:
                 self.volver_a_base()
                 break

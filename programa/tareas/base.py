@@ -20,7 +20,9 @@ from vision.plantillas import buscar_rotulo, localizar
 _ULT_RECOGIDA: dict = {}
 _ETIQUETAS_DATASET = ("mapa", "sistema", "panel_ballena", "zoom_ballena", "hueco", "menu_hueco",
                       "gemas", "gema", "modo", "radar", "pirata", "objetivo", "dialogo",
-                      "antes_de_atacar", "hueco_ballena", "menu_ballena")
+                      "antes_de_atacar", "hueco_ballena", "menu_ballena",
+                      # escombros (para enseñar al detector a verlos)
+                      "restos", "zona_restos", "resto_menu")
 
 
 def _recolectar(img, etiqueta: str, cuenta: str):
@@ -29,9 +31,12 @@ def _recolectar(img, etiqueta: str, cuenta: str):
             return
         import os
         ahora = time.time()
-        if ahora - _ULT_RECOGIDA.get(cuenta, 0) < 20:
+        # las de escombros llevan su propio turno (si no, casi nunca se
+        # guardan: llegan justo despues de las del sistema)
+        turno = (cuenta, etiqueta.startswith(("restos", "zona_restos", "resto_menu")))
+        if ahora - _ULT_RECOGIDA.get(turno, 0) < (5 if turno[1] else 20):
             return
-        _ULT_RECOGIDA[cuenta] = ahora
+        _ULT_RECOGIDA[turno] = ahora
         base = os.path.join(os.path.dirname(carpeta_diag()), "dataset")
         os.makedirs(base, exist_ok=True)
         if len(os.listdir(base)) >= 3000:
@@ -199,9 +204,63 @@ class TareaBase:
             time.sleep(intervalo)
         return None
 
-    def esperar_quieto(self, segundos: float = 12.0, etiqueta="carga"):
+    def esperar_hasta(self, cond, max_s: float, paso: float = 0.25,
+                      etiqueta: str = "espera"):
+        """Sustituye a un time.sleep fijo: captura y sale EN CUANTO cond(img)
+        sea cierta (no espera el tiempo entero). Devuelve la imagen que la
+        cumplio, o None si pasaron max_s segundos o se pidio parar. La
+        captura (~0.3 s) ya marca el ritmo; paso es una pausa extra corta.
+        Uso: img = self.esperar_hasta(lambda im: pantallas.menu(im), 4)"""
+        fin = time.time() + max_s
+        while not self.parado():
+            img = self.cap(etiqueta)
+            try:
+                if cond(img):
+                    return img
+            except Exception:                             # noqa: BLE001
+                pass
+            if time.time() + paso >= fin:
+                return None
+            time.sleep(paso)
+        return None
+
+    @staticmethod
+    def _miniatura(img):
+        return cv2.resize(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), (160, 90),
+                          interpolation=cv2.INTER_AREA).astype(np.int16)
+
+    def esperar_cambio(self, img_ref, max_s: float = 3.0, umbral: float = 2.5,
+                       paso: float = 0.15, zona=None, etiqueta: str = "cambio"):
+        """Tras un toque: espera a que la pantalla cambie respecto a img_ref
+        (la captura de ANTES del toque) y devuelve la nueva captura; si no
+        cambia en max_s, devuelve la ultima captura igualmente (nunca None,
+        asi el codigo sigue como con un sleep). zona = (x0, y0, x1, y1) en
+        fracciones para vigilar solo una parte. umbral = diferencia media
+        (0-255) de la miniatura. Para animaciones que aun se mueven al salir
+        use despues esperar_quieto()."""
+        def recorte(im):
+            if not zona:
+                return im
+            h, w = im.shape[:2]
+            return im[int(zona[0 + 1] * h):int(zona[3] * h), int(zona[0] * w):int(zona[2] * w)]
+        ref = self._miniatura(recorte(img_ref))
+        fin = time.time() + max_s
+        img = img_ref
+        while not self.parado():
+            img = self.cap(etiqueta)
+            if float(np.abs(self._miniatura(recorte(img)) - ref).mean()) >= umbral:
+                return img
+            if time.time() + paso >= fin:
+                break
+            time.sleep(paso)
+        return img
+
+    def esperar_quieto(self, segundos: float = 12.0, etiqueta="carga",
+                       intervalo: float = 0.7):
         """Espera a que la pantalla deje de cambiar: el mapa tarda en cargar
-        los elementos y no siempre lo hace igual de rapido."""
+        los elementos y no siempre lo hace igual de rapido.
+        intervalo: pausa entre capturas (0.7 por defecto, como siempre); con
+        0.2 se gana ~1 s por llamada si la animacion es corta."""
         fin, prev, quietas = time.time() + segundos, None, 0
         img = None
         while time.time() < fin and not self.parado():
@@ -215,7 +274,7 @@ class TareaBase:
             else:
                 quietas = 0
             prev = peq
-            time.sleep(0.7)
+            time.sleep(intervalo)
         return img
 
     def atras(self, img=None):

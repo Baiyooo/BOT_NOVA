@@ -67,8 +67,16 @@ class _EnvioFlotas:
             img2 = img
             for toque in range(3):
                 self.ctrl.tap(hueco)
-                time.sleep(1.4)
-                img2 = self.cap("hueco")
+                # en cuanto sale el menu del hueco se sigue (antes: 1,4 s fijos)
+                time.sleep(0.3)
+                # solo vale 'Movimiento en grupo' o un menu que NO sea el del
+                # pirata (el suyo sigue abierto hasta que el primer toque lo cierra)
+                img2 = self.esperar(
+                    lambda i: (localizar(i, "movimiento")[0] >= self.UMBRAL_MOVIMIENTO
+                               or (self.menu_abierto(i) and not self._menu_pirata(i))),
+                    1.1, 0.2, "hueco")
+                if img2 is None:
+                    img2 = self.cap("hueco")
                 pm, cm, _ = localizar(img2, "movimiento")
                 en_fila = (abs(cm[1] - cg[1]) < 45 * e
                            and abs(cm[0] - cg[0]) < 140 * e)
@@ -83,7 +91,7 @@ class _EnvioFlotas:
                         return True, desplaz
                     self.log("  El salto no se ha completado.")
                     return False, desplaz
-                if self.menu_abierto(img2):
+                if self.menu_abierto(img2) and not self._menu_pirata(img2):
                     # ha seleccionado otra cosa: cerrar y probar el otro lado
                     self.cerrar_menu(img2)
                     break
@@ -91,6 +99,10 @@ class _EnvioFlotas:
             self.log("  Ese hueco no sirve; pruebo otro.")
             img = self.cap("hueco")
         return False, None
+
+    def _menu_pirata(self, img) -> bool:
+        """Sigue abierto el menu del pirata (tiene 'Atacar')."""
+        return buscar_rotulo(img, "atacar")[0] >= self.UMBRAL_ATACAR
 
     def _casilla_marcada(self, img, c_sel, esc) -> bool:
         cx, cy = c_sel[0] + self.DX_CASILLA * esc, c_sel[1]
@@ -151,7 +163,7 @@ class _EnvioFlotas:
         self.log(f"  Elijo la primera flota libre ({len(libres)} libre(s)).")
         self.ctrl.tap(destino)
         if self.esperar(lambda i: buscar_rotulo(i, "elige")[0] < 0.6,
-                        6.0, etiqueta="enviado") is None:
+                        6.0, 0.25, etiqueta="enviado") is None:
             self.log("  El dialogo no se cierra; algo no ha ido bien.")
             return "sin_confirmar"
         self.status["atacados"] += 1
@@ -173,7 +185,7 @@ class _EnvioFlotas:
                 break
             if (buscar_rotulo(img, "elige")[0] >= self.UMBRAL_DIALOGO
                     and buscar_rotulo(img, "seleccionar")[0] < 0.6):
-                time.sleep(0.8)          # por si aun se esta dibujando
+                time.sleep(0.4)          # por si aun se esta dibujando
                 img = self.cap("dialogo")
                 if buscar_rotulo(img, "seleccionar")[0] >= self.UMBRAL_DIALOGO:
                     break
@@ -189,7 +201,7 @@ class _EnvioFlotas:
                 time.sleep(1.5)
                 fin = max(fin, time.time() + 8.0)
                 continue
-            time.sleep(0.6)
+            time.sleep(0.25)
             img = None
         if img is None or buscar_rotulo(img, "seleccionar")[0] < self.UMBRAL_DIALOGO:
             self.log("  No se ha abierto el dialogo de flotas.")
@@ -203,10 +215,20 @@ class _EnvioFlotas:
         for _ in range(2):
             if marcada:
                 break
+            # el dialogo puede haberse movido: recalcular donde esta la casilla
+            p, c_nuevo, e_nuevo = localizar(img, "seleccionar")
+            if p >= self.UMBRAL_DIALOGO:
+                c_sel, esc = c_nuevo, e_nuevo
+                casilla = (int(c_sel[0] + self.DX_CASILLA * esc), int(c_sel[1]))
             antes = img
             self.ctrl.tap(casilla)
-            time.sleep(1.0)
-            img = self.cap("casilla")
+            time.sleep(0.3)
+            # sale en cuanto la casilla se marca; si no, tras 1,5 s se queda
+            # con la ultima captura (antes: 1,0 s fijo)
+            img = self.esperar(lambda i, c=c_sel, k=esc: self._casilla_marcada(i, c, k),
+                               1.5, 0.2, "casilla")
+            if img is None:
+                img = self.cap("casilla")
             # marcada si sale la marca verde, o si la casilla ha cambiado de
             # aspecto tras pulsarla (venia vacia: el cambio es marcarla)
             r = int(18 * esc)
@@ -245,7 +267,7 @@ class _EnvioFlotas:
 
         # 3) comprobar que el dialogo se ha cerrado
         if self.esperar(lambda i: buscar_rotulo(i, "seleccionar")[0] < 0.6,
-                        6.0, etiqueta="enviado") is None:
+                        6.0, 0.25, etiqueta="enviado") is None:
             self.log("  El dialogo no se cierra; algo no ha ido bien.")
             return "sin_confirmar"
         if contar:

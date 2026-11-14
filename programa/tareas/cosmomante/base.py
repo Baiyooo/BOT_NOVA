@@ -198,7 +198,7 @@ class _CosmomanteBase(Recompensas):
             self.ctrl.drag_ms = lento
         self._tipos_mem = {}
         mapa, completo = cm.unir(frames, self._tipos_mem)
-        desp = [cm.desplazamiento(x, y) for x, y in zip(frames, frames[1:])]
+        desp = [cm.desplazamiento(x, y) for x, y in zip(frames, frames[1:], strict=False)]
         self.log(f"  Panel recorrido: {len(frames)} capturas, desplazamientos {desp}.")
         self._cerrar_panel(frames[-1])
         return mapa, completo, frames
@@ -206,7 +206,8 @@ class _CosmomanteBase(Recompensas):
     def observar_plan(self):
         """Lee el mapa del nivel y apunta en el registro que haria la estrategia
         (posicion = casilla recogida mas avanzada). No pulsa multiplicadores."""
-        import json, os
+        import json
+        import os
         try:
             res = self.leer_nivel()
             if not res:
@@ -236,7 +237,8 @@ class _CosmomanteBase(Recompensas):
         cosmomante_log.jsonl (hora, etiqueta, dados disponibles). No pulsa
         nada. Sirve para estudiar donde cae la baliza y afinar la estrategia
         de multiplicadores con datos reales. Conserva las ultimas 60."""
-        import json, os
+        import json
+        import os
         try:
             base = os.path.join(os.path.dirname(carpeta_diag()), "cosmomante_log")
             nombre = str(getattr(self.ctrl, "name", "inst")).replace(":", "_")

@@ -5,7 +5,7 @@ config.py), con esta forma:
     {"_v": 1, "dias": {"2026-10-30": {"127.0.0.1:5555": {"sigilo": 21, ...}}}}
 Claves que se cuentan: sigilo (piratas de sigilo atacados), normales (piratas
 normales atacados), encontrados, recompensas (recogidas), ok (pasos correctos),
-errores, segundos (tiempo activo).
+errores, segundos (tiempo activo), ballenas (muertas) y gemas (recogidas).
 Varias cuentas son procesos distintos que escriben a la vez: cada anotacion
 relee el archivo, suma y guarda, con un cerrojo de archivo.
 """
@@ -14,7 +14,8 @@ import time
 
 from nucleo import config
 
-CLAVES = ("sigilo", "normales", "encontrados", "recompensas", "ok", "errores", "segundos")
+CLAVES = ("sigilo", "normales", "encontrados", "recompensas", "ok", "errores", "segundos",
+          "ballenas", "gemas")
 MAX_DIAS = 400
 
 

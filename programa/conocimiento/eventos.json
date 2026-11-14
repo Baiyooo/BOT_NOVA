@@ -1,76 +1,225 @@
 {
  "eventos": {
   "artefactos": {
+   "info": "",
    "lector_v": 3,
+   "limpieza": 3,
    "misiones": [
     {
-     "id": "la_civilizacion_def",
-     "texto": "La civilizacion deF"
+     "id": "explorando_1_explora_3_planetas",
+     "meta": 3,
+     "texto": "Explora 3 planetas",
+     "titulo": "Explorando 1"
     },
     {
-     "id": "vista_previa_del_bote",
-     "texto": "Vista previa del bote"
+     "id": "actualizar_academia_3_actualiza_la_acade",
+     "meta": 10,
+     "texto": "Actualiza la academia 10 veces",
+     "titulo": "Actualizar Academia 3"
     },
     {
-     "id": "la_civilizacion_de_ar",
-     "texto": "La civilizacion de Ar"
+     "id": "construye_naves_2_construye_naves_20_vec",
+     "meta": 20,
+     "texto": "Construye naves 20 veces",
+     "titulo": "Construye naves 2"
+    },
+    {
+     "id": "actualizar_academia_1_actualiza_la_acade",
+     "meta": 3,
+     "texto": "Actualiza la academia 3 veces",
+     "titulo": "Actualizar Academia 1"
+    },
+    {
+     "id": "construye_naves_1_construye_naves_10_vec",
+     "meta": 10,
+     "texto": "Construye naves 10 veces",
+     "titulo": "Construye naves 1"
+    },
+    {
+     "id": "recoger_restos_2_recoge_20_restos",
+     "meta": 20,
+     "texto": "Recoge 20 restos",
+     "titulo": "Recoger restos 2"
+    },
+    {
+     "id": "recoger_restos_1_recoge_10_restos",
+     "meta": 10,
+     "texto": "Recoge 10 restos",
+     "titulo": "Recoger restos 1"
     }
    ],
    "nombre": "Artefactos"
   },
   "bendicion_celestial": {
+   "info": "",
    "lector_v": 3,
+   "limpieza": 3,
    "misiones": [
     {
      "id": "destacamento_de_completa_15_misiones_reg",
      "meta": 15,
-     "texto": "Destacamento de Completa 15 misiones regulares de destacamento para obtener recompensas"
+     "texto": "Completa 15 misiones regulares de destacamento para obtener recompensas",
+     "titulo": "Destacamento de exploración"
     },
     {
      "id": "produccion_de_completa_la_produccion_de_",
      "meta": 40,
-     "texto": "Produccion de Completa la produccion de armas40veces"
+     "texto": "Completa la producción de componentes 40 veces",
+     "titulo": "Producción de componentes"
     },
     {
-     "id": "produccion_de_completa_la_produccion_de_",
+     "id": "produccion_de_componentes_completa_la_pr",
      "meta": 40,
-     "texto": "Produccion de Completa la produccion de componentes 40 veces"
+     "texto": "Completa la producción de componentes 40 veces",
+     "titulo": "Producción de componentes"
     },
     {
      "id": "eliminate_40_stealth_pirates",
      "meta": 40,
-     "texto": "Eliminate 40 Stealth Pirates"
+     "texto": "Elimina 40 piratas ocultos",
+     "titulo": "Elimina piratas ocultos"
     },
     {
      "id": "explorar_qalaxia",
-     "texto": "Explorar qalaxia"
+     "meta": 20,
+     "texto": "Explora 20 planetas",
+     "titulo": "Explorar galaxia"
     },
     {
      "id": "totalde30dia_s_minutos_usar_objetos_abri",
+     "meta": 400,
+     "texto": "Abrir 400 cajas",
+     "titulo": "Usar objetos"
+    },
+    {
+     "id": "naves_construye_una_fuerza_de_6_000_000_",
      "meta": 6000000,
-     "texto": "totalde30dia(s) minutos Usar objetos Abrir 400 cajas Naves Construyeunafuerza de 6.000.000 flotas de naves"
+     "texto": "Construye una fuerza de 6.000.000 flotas de naves",
+     "titulo": "Naves"
     },
     {
      "id": "naves_construye_una_fuerza_de_12_000_000",
      "meta": 12000000,
-     "texto": "Naves Construye una fuerza de 12.000.000 flotas de naves Usa GEC Gasta 2.000 GEC"
+     "texto": "Construye una fuerza de 12.000.000 flotas de naves",
+     "titulo": "Naves"
+    },
+    {
+     "id": "usa_gec_gasta_2_000_gec",
+     "meta": 2000,
+     "texto": "Usa GEC Gasta 2.000 GEC",
+     "titulo": "Naves"
     },
     {
      "id": "usa_gec_gasta_10_000_gec",
      "meta": 10000,
-     "texto": "Usa GEC Gasta 10.000 GEC"
+     "texto": "Gasta 10.000 GEC",
+     "titulo": "Usa GEC"
     },
     {
      "id": "usa_gec_gasta5_00ogec",
-     "meta": 500,
-     "texto": "Usa GEC Gasta5.00OGEC"
+     "meta": 5000,
+     "texto": "Gasta 5.000 GEC",
+     "titulo": "Usa GEC"
     },
     {
      "id": "destruye_una_fuerza_de_flotas_piratas",
-     "texto": "Destruye una fuerza de flotas piratas"
+     "texto": "Destruye una fuerza de flotas piratas",
+     "titulo": "Fuerza pirata"
     }
    ],
    "nombre": "Bendicion celestial"
+  },
+  "bingo_estelar": {
+   "info": "",
+   "lector_v": 3,
+   "limpieza": 3,
+   "misiones": [
+    {
+     "id": "mision_de_legion_completa_3_misiones_de_",
+     "meta": 30,
+     "texto": "Completa 3 misiones de legion Colección Recoge 30 restos Eliminate 10 Stealth Pirates",
+     "titulo": "Misión de legion"
+    },
+    {
+     "id": "usa_gec_gasta_2_000_gec",
+     "meta": 2000,
+     "texto": "Gasta 2.000 GEC",
+     "titulo": "Usa GEC"
+    },
+    {
+     "id": "elimina_piratas_ocultos_elimina_10_pirat",
+     "meta": 10,
+     "texto": "Elimina 10 piratas ocultos",
+     "titulo": "Elimina piratas ocultos"
+    },
+    {
+     "id": "actualizar_academia_actualiza_la_academi",
+     "texto": "Actualiza la academia S 0 veces",
+     "titulo": "Actualizar Academia"
+    },
+    {
+     "id": "explorar_galaxia_explora_s_habitable_pla",
+     "texto": "Explora S Habitable planetas",
+     "titulo": "Explorar galaxia"
+    },
+    {
+     "id": "explorar_galaxia_explora_5_gas_planetas",
+     "meta": 5,
+     "texto": "Explora 5 Habitable planetas",
+     "titulo": "Explorar galaxia"
+    },
+    {
+     "id": "usa_gec_compra_gec_compra_soo_gec_mision",
+     "meta": 30,
+     "texto": "Compra GEC Compra Soo GEC Misión de legion Completa 3 misiones de legion Colección Recoge 30 restos",
+     "titulo": "Usa GEC"
+    },
+    {
+     "id": "usar_objetos_usa_3_dia_s_aceleracion_es",
+     "meta": 3,
+     "texto": "Usa 3 día(s) aceleración es",
+     "titulo": "Usar objetos"
+    },
+    {
+     "id": "mision_de_legion_completa_3_misiones_de__",
+     "meta": 3,
+     "texto": "Completa 3 misiones de legion",
+     "titulo": "Misión de legion"
+    }
+   ],
+   "nombre": "Bingo Estelar"
+  },
+  "cion_de_recursos": {
+   "info": "",
+   "lector_v": 3,
+   "limpieza": 3,
+   "misiones": [
+    {
+     "id": "explorando_1_explora_3_planetas",
+     "meta": 3,
+     "texto": "Explora 3 planetas",
+     "titulo": "Explorando 1"
+    },
+    {
+     "id": "actualizar_academia_1_actualiza_la_acade",
+     "meta": 3,
+     "texto": "Actualiza la academia 3 veces",
+     "titulo": "Actualizar Academia 1"
+    },
+    {
+     "id": "construye_naves_1_construye_naves_10_vec",
+     "meta": 10,
+     "texto": "Construye naves 10 veces",
+     "titulo": "Construye naves 1"
+    },
+    {
+     "id": "recoger_restos_2_recoge_20_restos",
+     "meta": 20,
+     "texto": "Recoge 20 restos",
+     "titulo": "Recoger restos 2"
+    }
+   ],
+   "nombre": "Cion de recursos"
   },
   "corazon_carmesi": {
    "lector_v": 3,
@@ -94,19 +243,62 @@
    ],
    "nombre": "Corazon Carmesi"
   },
-  "eventos": {
+  "cosmomante": {
+   "info": "",
+   "lector_v": 3,
+   "limpieza": 3,
+   "misiones": [
+    {
+     "id": "fuerza_pirata_destruye_una_fuerza_de_mas",
+     "meta": 5000000,
+     "texto": "Destruye una fuerza de más de 5.000.000 flotas piratas",
+     "titulo": "Fuerza pirata"
+    },
+    {
+     "id": "usar_objetos_abrir_300_cajas",
+     "meta": 300,
+     "texto": "Abrir 300 cajas",
+     "titulo": "Usar objetos"
+    },
+    {
+     "id": "completa_10_misiones_regulares_o",
+     "meta": 10,
+     "texto": "Completa 10 misiones regulares o",
+     "titulo": ""
+    },
+    {
+     "id": "completa_20_misiones",
+     "meta": 20,
+     "texto": "Completa 20 misiones regular",
+     "titulo": ""
+    },
+    {
+     "id": "acelerar_acelera_la_construccion_de_nave",
+     "meta": 10,
+     "texto": "Acelera la construcción de naves durante un total de 10 día (s) minutos",
+     "titulo": "Acelerar"
+    }
+   ],
+   "nombre": "Cosmomante"
+  },
+  "de_intercambio": {
    "lector_v": 3,
    "misiones": [
     {
-     "id": "la_civilizacion_de_f",
-     "texto": "La civilizacion de F"
+     "id": "nucleo_de_deformacion",
+     "texto": "Nucleo de deformacion"
     },
     {
-     "id": "vista_previa_del_bote",
-     "texto": "Vista previa del bote"
+     "id": "exchange_collection_2",
+     "meta": 2,
+     "texto": "Exchange Collection 2"
+    },
+    {
+     "id": "nucleo_de_la",
+     "texto": "Nucleo de la"
     }
    ],
-   "nombre": "eventos"
+   "nombre": "De intercambio"
   },
   "eventos_de_intercambio": {
    "lector_v": 3,
@@ -152,66 +344,108 @@
    "nombre": "Materiales de Vacio"
   },
   "neural_roaming": {
+   "info": "",
    "lector_v": 3,
+   "limpieza": 3,
    "misiones": [
     {
      "id": "usa_gec_gasta2_000gec",
      "meta": 2000,
-     "texto": "Usa GEC Gasta2.000GEC"
+     "texto": "Gasta 2.000 GEC",
+     "titulo": "Usa GEC"
     },
     {
      "id": "elimina_piratas_ocultos_eliminate3osteal",
-     "meta": 3,
-     "texto": "Elimina piratas ocultos Eliminate3OStealthPirates"
+     "meta": 30,
+     "texto": "Elimina 30 piratas ocultos",
+     "titulo": "Elimina piratas ocultos"
     },
     {
      "id": "speed_up_speed_up_upgrades_for_a_total_o",
      "meta": 4320,
-     "texto": "Speed Up Speed up upgrades for a total of 4.320 minutes"
+     "texto": "Acelera mejoras durante un total de 4.320 minutos",
+     "titulo": "Acelerar"
     }
    ],
    "nombre": "Neural Roaming"
   },
+  "prisma_del_cosmos": {
+   "info": "",
+   "lector_v": 3,
+   "limpieza": 3,
+   "misiones": [
+    {
+     "id": "elimina_piratas_ocultos_elimina_10_pirat",
+     "meta": 10,
+     "texto": "Elimina 10 piratas ocultos",
+     "titulo": "Elimina piratas ocultos"
+    },
+    {
+     "id": "usa_gec_gasta_2_000_gec",
+     "meta": 2000,
+     "texto": "Gasta 2.000 GEC",
+     "titulo": "Usa GEC"
+    },
+    {
+     "id": "usa_gec_gasta_10_000_gec",
+     "meta": 10000,
+     "texto": "Gasta 10.000 GEC",
+     "titulo": "Usa GEC"
+    },
+    {
+     "id": "actualizar_academia_actualiza_la_academi",
+     "meta": 10,
+     "texto": "Actualiza la academia 10 o veces",
+     "titulo": "Actualizar Academia"
+    },
+    {
+     "id": "coleccion_recoge_100_restos",
+     "meta": 100,
+     "texto": "Recoge 100 restos",
+     "titulo": "Colección"
+    }
+   ],
+   "nombre": "Prisma del Cosmos"
+  },
   "reflejo_de_vacio": {
-   "lector_v": 2,
+   "info": "",
+   "lector_v": 3,
+   "limpieza": 3,
    "misiones": [
     {
      "id": "destacamento_de_exploracion_completa_6_m",
      "meta": 6,
-     "texto": "Destacamento de exploracion Completa 6 misiones regulares de destacamento para obtenerrecompensas"
-    },
-    {
-     "id": "destruye_una_fuerzademasde_5_000_0o0flot",
-     "meta": 50000,
-     "texto": "Destruye una fuerzademasde 5.000.0o0flotas piratas Destacamento de exploracion Completa 18 misiones regulares de destacamentopara obtener recompensas"
+     "texto": "Completa 6 misiones regulares de destacamento para obtener recompensas",
+     "titulo": "Destacamento de exploración"
     },
     {
      "id": "produccion_de_componentes_completa_la_pr",
-     "texto": "Produccion de componentes Completa la produccion de"
+     "meta": 20,
+     "texto": "Completa la producción de componentes 20 veces",
+     "titulo": "Producción de componentes"
     },
     {
-     "id": "gasta_10_000_gec",
+     "id": "produccion_de_componentes_completa_la_pr_",
+     "texto": "Completa la producción de",
+     "titulo": "Producción de componentes"
+    },
+    {
+     "id": "usa_gec_gasta_10_000_gec",
      "meta": 10000,
-     "texto": "Gasta 10.000 GEC"
+     "texto": "Gasta 10.000 GEC",
+     "titulo": "Usa GEC"
     },
     {
-     "id": "actualizar_academia_actualiza_la_academi",
-     "meta": 100,
-     "texto": "Actualizar Academia Actualiza la academia 100 veces"
+     "id": "usa_gec_gasta_5_000_gec",
+     "meta": 5000,
+     "texto": "Gasta 5.000 GEC",
+     "titulo": "Usa GEC"
     },
     {
      "id": "usar_objetos_abrir_100_cajas",
      "meta": 100,
-     "texto": "Usar objetos Abrir 100 cajas"
-    },
-    {
-     "id": "explorar_galaxia_explora_0_planetas",
-     "texto": "Explorar galaxia Explora 0 planetas"
-    },
-    {
-     "id": "usoucl_gasta_10_000_gec",
-     "meta": 10000,
-     "texto": "USOUCL Gasta 10.000 GEC"
+     "texto": "Abrir 100 cajas",
+     "titulo": "Usar objetos"
     }
    ],
    "nombre": "Reflejo de vacio"
@@ -229,20 +463,6 @@
     }
    ],
    "nombre": "Santuario de la Hidra"
-  },
-  "tefactos": {
-   "lector_v": 3,
-   "misiones": [
-    {
-     "id": "la_civilizacion_de_f",
-     "texto": "La civilizacion de F"
-    },
-    {
-     "id": "vista_previa_del_bote",
-     "texto": "Vista previa del bote"
-    }
-   ],
-   "nombre": "tefactos"
   }
  },
  "version": 1

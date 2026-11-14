@@ -193,7 +193,7 @@ class PrepararGrupo(Recompensas):
             if "5 min" not in primera and "5min" not in primera.replace(" ", ""):
                 self.log(f"  No reconozco la lista de aceleraciones ({primera[:50]}); no uso nada.")
                 break
-            filas = list(zip(DUR, usar))
+            filas = list(zip(DUR, usar, strict=False))
             elegida = next(((s, u) for s, u in filas if s >= restante), filas[-1])
             fila = " ".join(ocr.normal(d["texto"]) for d in items
                             if abs(d["centro"][1] - elegida[1]["centro"][1]) < h * 0.06)

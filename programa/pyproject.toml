@@ -1,0 +1,39 @@
+[project]
+name = "novabot"
+requires-python = ">=3.12"
+# Las dependencias reales (con versiones probadas) viven en requirements.txt:
+# el instalador automatico de BOT.bat las instala desde ahi.
+dependencies = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["pruebas/revision", "conocimiento"]
+
+[tool.ruff.lint]
+# Reglas base + utilidades practicas, sin dogmatismo: el codigo es suyo y
+# tiene estilo propio (lineas compactas, comentarios largos en espanol).
+select = [
+    "E",   # pycodestyle errores
+    "W",   # pycodestyle avisos
+    "F",   # pyflakes (bugs de verdad: imports sin usar, variables muertas)
+    "B",   # bugbear (bugs comunes)
+    "UP",  # modernizacion de sintaxis
+    "SIM", # simplificaciones
+]
+ignore = [
+    "E501",  # lineas largas: aceptadas, el estilo del proyecto las usa
+    "E741",  # nombres cortos de variable (l, I): estilos historicos
+    "E701",  # una linea tras los dos puntos: estilo compacto del proyecto
+    "E702",  # punto y coma en una linea: estilo compacto del proyecto
+    "E402",  # imports aplazados: evitan dependencias circulares (vision/tareas)
+    "B007",  # variable de bucle sin usar: for x, y, r con r sobrando es normal
+    "SIM102", # if anidado aplanable: a veces es mas claro en espanol
+    "SIM103", # condicion devuelta directamente: igual
+    "SIM105", # try/except/pass: patrón habitual para "mejor effort"
+    "SIM108", # ternario forzado: el if/else a veces es mas claro en espanol
+    "SIM905", # .split como formato legible: vocabulario en textos_mision
+]
+
+[tool.ruff.lint.per-file-ignores]
+"pruebas/*" = ["B011"]   # assert False es valido en pruebas

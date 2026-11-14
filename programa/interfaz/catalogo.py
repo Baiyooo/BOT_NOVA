@@ -16,6 +16,7 @@ TAREA_GRUPOS = (
     ("Piratas", ("Piratas de sigilo", "Piratas normales", "Piratas: sigilo + normales")),
     ("Recompensas", ("Recompensas diarias", "Recompensas de eventos")),
     ("Cosmomante", ("Cosmomante",)),
+    ("Ballenas", ("Solo ballenas",)),
     ("Minijuegos y otros", ("Roaming Test", "Simulación")),
 )
 TAREA_FILA = {"Piratas de sigilo": "piratas",
@@ -23,7 +24,7 @@ TAREA_FILA = {"Piratas de sigilo": "piratas",
               "Piratas: sigilo + normales": "mixto", "Roaming Test": "roaming",
               "Recompensas diarias": "recompensas", "Recompensas de eventos": "eventos",
               "Simulación": "simulacion", "Cosmomante": "cosmomante",
-              "Rutina automática": "rutina"}
+              "Rutina automática": "rutina", "Solo ballenas": "ballenas"}
 
 
 NOMBRE_TAREA = {v: k for k, v in TAREA_FILA.items()}
@@ -33,14 +34,14 @@ TAREAS = {"roaming": "Roaming Test", "piratas": sigilo.PiratasSigilo.NOMBRE,
           "normales": normales.PiratasNormales.NOMBRE, "recompensas": recompensas.Recompensas.NOMBRE,
           "simulacion": recompensas.Simulacion.NOMBRE, "rutina": rutina.Rutina.NOMBRE,
           "cosmomante": juego.Cosmomante.NOMBRE, "mixto": mixto.PiratasMixto.NOMBRE,
-          "eventos": eventos.RecogerEventos.NOMBRE}
+          "eventos": eventos.RecogerEventos.NOMBRE, "ballenas": rutina.SoloBallenas.NOMBRE}
 
 
 #  Lo que cuenta el limite de cada tarea (None = no tiene limite que poner)
 UNIDAD = {"piratas": "búsquedas", "normales": "ataques", "roaming": "partidas", "mixto": None,
           "recompensas": None, "eventos": None, "simulacion": None, "cosmomante": None,
-          "rutina": None}
-SIN_LIMITE = {"recompensas": "una pasada", "eventos": "una pasada", "simulacion": "una pasada",
+          "rutina": None, "ballenas": None}
+SIN_LIMITE = {"ballenas": "hasta el tope del día","recompensas": "una pasada", "eventos": "una pasada", "simulacion": "una pasada",
               "cosmomante": "una pasada", "rutina": "hasta que la pares",
               "mixto": "hasta que la pares"}
 AYUDA_TAREA = {
@@ -51,7 +52,9 @@ AYUDA_TAREA = {
     "recompensas": "Recoge los suministros gratis, la recompensa diaria y las tareas diarias.",
     "eventos": "Recoge las recompensas de los eventos; nunca compra ni gasta GEC.",
     "simulacion": "Simulación automática de batalla, solo si es gratis (0 GEC).",
-    "cosmomante": "Lee el mapa, juega con dados remotos e imanes, sube a nivel 6 y reclama las metas.",
+    "cosmomante": "Tiradas gratis y metas; gasta dados solo si llega a nivel 6 (ajustes en Eventos).",
+    "ballenas": "Solo ballenas de éter, con los mismos ajustes que la Rutina "
+                "(Ajustes > Ballenas: rol, pareja, robots y tope del día).",
     "rutina": "Decide sola qué toca en cada momento: lee los eventos y sus misiones, "
               "hace lo diario al empezar y ataca piratas según lo que pidan los eventos.",
 }

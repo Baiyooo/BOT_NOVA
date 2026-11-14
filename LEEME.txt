@@ -55,6 +55,42 @@ COMO USARLO
   eliges su tarea, el limite y le das a EMPEZAR. Cada instancia
   trabaja en paralelo con las demas.
 
+  La ventana tiene seis pestanas:
+
+    Instancias     Las tarjetas de cada cuenta: tarea, limite, lo que
+                   hace ahora, lo siguiente y los contadores de hoy.
+                   El estado va siempre con icono y texto (en marcha,
+                   parada, sin conexion, en pausa).
+    Eventos        Los eventos del juego y sus misiones, con lo que
+                   falta y cuando cierran.
+    Estadisticas   Panel de mando, historico por cuenta y dia, y
+                   graficas (piratas, gemas, ballenas, errores y horas
+                   en marcha).
+    Registro       Mensajes de todas las cuentas, con filtros por
+                   cuenta, tipo y texto, colores por tipo y botones
+                   para copiar, ver las capturas o abrir el
+                   diagnostico.
+    Salud          Cuanto usa el bot del equipo (CPU y memoria), como
+                   va el detector (procesador o grafica, ms por
+                   imagen), el lector de texto y la conexion ADB de
+                   cada cuenta (con Reconectar).
+    Ajustes        Un resumen por cuenta y su boton de ajustes.
+
+  En cada tarjeta, ADEMAS de Empezar/Parar:
+    - Pausar / Reanudar: congela esa cuenta al momento.
+    - Ajustes: Rutina, Piratas, Ballenas, Cosmomante y Opciones.
+    - Menu "... Mas":
+        Parar al acabar lo que hace   termina el paso y para
+        Pausar unos minutos           se reanuda sola
+        Recoger gemas del sistema     pide la recogida de gemas
+        Releer eventos ahora          vuelve a leer los eventos
+        Probar 1 ballena              gasta 1 Senuelo de eter (pide
+                                      confirmacion antes)
+        Horario de esta cuenta        franjas en las que NO se hace
+                                      una tarea (p. ej. sin piratas de
+                                      2 a 8; 22-6 cruza la medianoche)
+        Exportar / Importar ajustes   copia los de una cuenta a otra
+
   Tareas:
 
     Rutina automatica   Decide sola que toca en cada momento: lee los
@@ -122,6 +158,15 @@ GRAFICA
   imagen, 2 hilos). Si hay grafica, el bot la prueba una vez al empezar
   y solo la usa si da lo mismo y va claramente mas rapida.
 
+  La grafica se comparte entre todas las cuentas: un solo uso a la vez y
+  como mucho unas 3,5 imagenes por segundo; la cuenta que no consigue
+  turno en ese instante usa el procesador (nunca se queda esperando). Si
+  la grafica se ocupa o falla varias veces seguidas, se aparta un rato.
+
+  En la pestana Salud se puede apagar con "Usar la grafica cuando
+  compense": el cambio es inmediato y vale para todas las cuentas. Al
+  lado se ve cual se esta usando y cuantos ms tarda cada imagen.
+
 
 PRUEBAS
 -------
@@ -142,6 +187,19 @@ PRUEBAS
 
     python pruebas\pruebas_ballenas_humo.py
         Ciclos de ballenas con un BlueStacks falso (no toca el juego).
+
+    python pruebas\pruebas_ventana.py
+        Abre la ventana de verdad con cuentas falsas y prueba las
+        pestanas, el registro, las graficas, el horario, las acciones de
+        la tarjeta y la pestana Salud. No toca ADB ni el juego.
+
+    python pruebas\pruebas_horario.py
+        Comprueba las franjas del horario y que el planificador las
+        respeta (tambien al cruzar la medianoche).
+
+    ruff check .
+        Revisa el codigo en busca de bugs comunes. La configuracion esta
+        en pyproject.toml. Nunca uses "ruff format" (cambiaria el estilo).
 
 
 PASAR UNA VERSION A OTRO EQUIPO

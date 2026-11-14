@@ -19,6 +19,8 @@ import time
 import cv2
 import numpy as np
 
+from vision import gpu_compartida
+
 CLASES = ["ballena", "gema", "flota", "pirata"]
 NOMBRE_MODELO = "novabot_det.onnx"
 TAM = 640
@@ -42,11 +44,12 @@ class Detector:
                                            providers=["CPUExecutionProvider"])
         self.entrada = self.sesion.get_inputs()[0].name
         self.proveedor = "CPU"
-        self._correr = self._correr_cpu
-        try:
-            self._elegir_motor(ruta, ort, opts)
-        except Exception:                                     # noqa: BLE001
-            self._correr, self.proveedor = self._correr_cpu, "CPU"
+        self._gpu = None                  # (nombre, funcion) si la grafica compensa
+        self.ms = self.ms_cpu = self.ms_gpu = None
+        self._args_motor = (ruta, ort, opts)
+        self._gpu_probada = False
+        self.dispositivo = "CPU"          # con que se hizo la ultima inferencia
+        self._probar_motor()
         meta = self.sesion.get_modelmeta().custom_metadata_map or {}
         nombres = meta.get("names")
         self.clases = CLASES
@@ -62,7 +65,33 @@ class Detector:
     def _correr_cpu(self, x):
         return self.sesion.run(None, {self.entrada: x})[0]
 
-    def _elegir_motor(self, ruta, ort, opts):
+    def _probar_motor(self):
+        """Mide (una vez con la grafica permitida; si el usuario la tiene
+        desactivada solo se mide el procesador y se mira otra vez al activarla)."""
+        con_gpu = gpu_compartida.usar_gpu()
+        try:
+            self._elegir_motor(*self._args_motor, con_gpu=con_gpu)
+            self._gpu_probada = con_gpu
+        except Exception:                                     # noqa: BLE001
+            self._gpu, self.proveedor = None, "CPU"
+            self._gpu_probada = True
+
+    def _correr(self, x):
+        """Una inferencia: grafica si compensa, el usuario la permite y hay turno
+        (compartido, con limite de imagenes por segundo); si no, procesador."""
+        usar = gpu_compartida.usar_gpu()
+        if usar and not self._gpu_probada:
+            self._probar_motor()
+        self.dispositivo = "CPU"
+        if usar and self._gpu is not None:
+            lim = max(0.5, 8 * (self.ms_cpu or 100) / 1000)    # mas lento que el procesador: ocupada
+            y = gpu_compartida.compartida().ejecutar(self._gpu[1], x, lim)
+            if y is not None:
+                self.dispositivo = "GPU"
+                return y
+        return self._correr_cpu(x)
+
+    def _elegir_motor(self, ruta, ort, opts, con_gpu=True):
         """Si el PC tiene grafica, la prueba una vez: solo se queda con ella si
         da lo mismo que el procesador y va claramente mas rapida. Sin grafica
         (o si no compensa) se usa el procesador, con 2 hilos."""
@@ -80,7 +109,7 @@ class Detector:
         candidatos = []
         # 1) onnxruntime con CUDA o DirectML, si esta instalado ese paquete
         for prov in ("CUDAExecutionProvider", "DmlExecutionProvider"):
-            if prov in ort.get_available_providers():
+            if con_gpu and prov in ort.get_available_providers():
                 try:
                     ses = ort.InferenceSession(ruta, sess_options=opts,
                                                providers=[prov, "CPUExecutionProvider"])
@@ -91,7 +120,7 @@ class Detector:
                     pass
         # 2) OpenCV por OpenCL: vale para graficas NVIDIA, AMD e Intel sin instalar nada
         try:
-            if cv2.ocl.haveOpenCL():
+            if con_gpu and cv2.ocl.haveOpenCL():
                 cv2.ocl.setUseOpenCL(True)
                 if cv2.ocl.useOpenCL():
                     red = cv2.dnn.readNetFromONNX(ruta)
@@ -114,8 +143,12 @@ class Detector:
                 continue                                 # no da lo mismo: no se usa
             if t * self.GANANCIA_GPU < t_cpu and (mejor is None or t < mejor[0]):
                 mejor = (t, nombre, f)
+        self.ms_cpu = round(1000 * t_cpu)
+        self.ms_gpu = round(1000 * mejor[0]) if mejor else None
         if mejor is not None:
-            self.proveedor, self._correr = mejor[1], mejor[2]
+            self.proveedor, self._gpu = mejor[1], (mejor[1], mejor[2])
+        else:
+            self.proveedor, self._gpu = "CPU", None
         if mejor is None or "OpenCL" not in mejor[1]:
             try:
                 cv2.ocl.setUseOpenCL(False)              # dejar OpenCV como estaba
@@ -231,6 +264,45 @@ def ver(img, umbral=0.35) -> Escena:
         except Exception:                                     # noqa: BLE001
             pass
     return Escena(img, _clasico(img), "clasico")
+
+
+def estado_detector() -> dict:
+    """Estado para la interfaz: {dispositivo "GPU"|"CPU", ms_por_imagen,
+    gpu_disponible (hay grafica utilizable que compensa), usar_gpu (interruptor
+    del usuario), motivo, lector_texto_listo}. No carga el modelo si no hace falta."""
+    import importlib.util
+    usar = gpu_compartida.usar_gpu()
+    est = {"dispositivo": "CPU", "ms_por_imagen": None, "gpu_disponible": False,
+           "usar_gpu": usar, "motivo": "", "lector_texto_listo": False}
+    try:
+        est["lector_texto_listo"] = importlib.util.find_spec("rapidocr_onnxruntime") is not None
+    except Exception:                                         # noqa: BLE001
+        pass
+    det = Detector.cargar()
+    if det is None:
+        est["motivo"] = "sin modelo (detectores clasicos)"
+        return est
+    est["gpu_disponible"] = det._gpu is not None
+    if det._gpu is not None and usar and det.dispositivo == "GPU":
+        est["dispositivo"] = "GPU"
+        est["ms_por_imagen"] = det.ms_gpu
+        est["motivo"] = f"{det._gpu[0]}: {det.ms_gpu} ms frente a {det.ms_cpu} ms en procesador"
+        return est
+    est["ms_por_imagen"] = det.ms_cpu
+    if not usar:
+        est["motivo"] = "grafica desactivada por el usuario"
+    elif det._gpu is None:
+        est["motivo"] = ("la grafica no esta disponible o no compensa"
+                         if det._gpu_probada else "procesador")
+    else:
+        est["motivo"] = (gpu_compartida.compartida().motivo or "procesador hasta que haya turno de grafica")
+    return est
+
+
+def poner_usar_gpu(valor: bool) -> bool:
+    """Interruptor «usar_gpu» (persistente, en caliente). Solo es efectivo si la
+    grafica compensa al medir."""
+    return gpu_compartida.poner_usar_gpu(valor)
 
 
 def info() -> str:

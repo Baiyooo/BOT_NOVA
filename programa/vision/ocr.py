@@ -6,17 +6,39 @@ partes del bot que leen texto se saltan sin romper nada.
 """
 from __future__ import annotations
 
+import hashlib
+import os
 import threading
+import time
 
 _MOTOR = None
 _TIPO = None
-_CERROJO = threading.Lock()
+_CERROJO = threading.Lock()          # solo protege la carga de motores
+# Turnos simultaneos de OCR (en todo el PC): con 8 o mas nucleos caben 2
+# lecturas a la vez (1 hilo cada una) sin ahogar el PC; con menos, de una en una.
+TURNOS = 2 if (os.cpu_count() or 4) >= 8 else 1
+_MOTORES: list = []                  # un motor por turno (se crean al usarlos)
+_LIBRES: list[int] = list(range(TURNOS))
+_COND = threading.Condition()
+_CACHE: dict = {}                    # clave -> (instante, resultado)
+_CACHE_S = 1.0
 
 
-def _cargar():
+def _cargar(idx: int = 0):
+    """Motor del turno idx (se crea la primera vez). None si no hay RapidOCR."""
+    with _CERROJO:
+        if _TIPO == "ninguno":
+            return None
+        while len(_MOTORES) <= idx:
+            _MOTORES.append(_crear())
+            if _TIPO == "ninguno":
+                _MOTORES.clear()
+                return None
+        return _MOTORES[idx]
+
+
+def _crear():
     global _MOTOR, _TIPO
-    if _TIPO is not None:
-        return _MOTOR
     # Pocos hilos: con varias cuentas a la vez, el OCR con todos los nucleos
     # llego a dejar el PC sin responder (5 nov, 01:01).
     try:
@@ -46,56 +68,84 @@ HILOS = 1
 
 
 class _TurnoPC:
-    """Cerrojo entre procesos (un archivo): solo una cuenta lee texto a la
-    vez, para no ahogar el PC. Si alguien lo deja colgado, caduca en 20 s."""
+    """Cerrojo entre procesos (un archivo por turno): solo TURNOS cuentas leen
+    texto a la vez, para no ahogar el PC. Si alguien lo deja colgado, caduca en 20 s."""
 
-    def __init__(self):
-        import os
+    def __init__(self, turno: int = 0):
         from nucleo.rutas import carpeta_datos
-        self.ruta = os.path.join(carpeta_datos(), "ocr.lock")
+        base = carpeta_datos()
+        # un archivo por turno del PC (ocr.lock, ocr1.lock...): se coge el primero libre
+        self.rutas = [os.path.join(base, "ocr.lock" if i == 0 else f"ocr{i}.lock")
+                      for i in range(TURNOS)]
+        self.ruta = None
         self.fd = None
 
     def __enter__(self):
-        import os
-        import time
         fin = time.time() + 25
         while time.time() < fin:
-            try:
-                self.fd = os.open(self.ruta, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                return self
-            except FileExistsError:
+            for ruta in self.rutas:
                 try:
-                    if time.time() - os.path.getmtime(self.ruta) > 20:
-                        os.remove(self.ruta)
-                        continue
+                    self.fd = os.open(ruta, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                    self.ruta = ruta
+                    return self
+                except FileExistsError:
+                    try:
+                        if time.time() - os.path.getmtime(ruta) > 20:
+                            os.remove(ruta)
+                    except OSError:
+                        pass
                 except OSError:
-                    pass
-                time.sleep(0.1)
-            except OSError:
-                return self                      # carpeta no disponible: sin cerrojo
+                    return self                  # carpeta no disponible: sin cerrojo
+            time.sleep(0.05)
         return self
 
     def __exit__(self, *a):
-        import os
         if self.fd is not None:
             try:
                 os.close(self.fd)
-                os.remove(self.ruta)
+                os.remove(self.ruta)                    # ruta: el turno que cogio
             except OSError:
                 pass
 
 
 def disponible() -> bool:
-    with _CERROJO:
-        return _cargar() is not None
+    return _cargar(0) is not None
 
 
-def leer(img, zona=None, escala: float | None = None) -> list[dict]:
+def _clave(img, zona, escala, sin_giro):
+    return (hashlib.blake2b(img.tobytes(), digest_size=12).digest(), img.shape,
+            zona, escala, sin_giro)
+
+
+def leer(img, zona=None, escala: float | None = None, sin_giro: bool = False) -> list[dict]:
     """Textos de la imagen (BGR). zona = (x0, y0, x1, y1) en fracciones.
     Devuelve [{"texto", "caja": (x, y, w, h), "centro": (x, y), "p"}] en
-    coordenadas de la imagen completa, de arriba abajo."""
+    coordenadas de la imagen completa, de arriba abajo.
+    sin_giro: no dejar que el lector de la vuelta a los textos que cree
+    girados (con las cifras cortas de las etiquetas del mapa acierta mas:
+    «35.500» en vez de «DOS'SE»)."""
     if img is None:
         return []
+    # Misma imagen y mismos parametros en menos de 1 s: se reutiliza el resultado
+    # (varias comprobaciones seguidas sobre la misma captura).
+    try:
+        clave = _clave(img, tuple(zona) if zona else None, escala, sin_giro)
+    except Exception:                                      # noqa: BLE001
+        clave = None
+    ahora = time.time()
+    if clave is not None:
+        hit = _CACHE.get(clave)
+        if hit and ahora - hit[0] < _CACHE_S:
+            return [dict(d) for d in hit[1]]
+    res = _leer(img, zona, escala, sin_giro)
+    if clave is not None:
+        for k in [k for k, v in list(_CACHE.items()) if ahora - v[0] >= _CACHE_S]:
+            _CACHE.pop(k, None)
+        _CACHE[clave] = (time.time(), [dict(d) for d in res])
+    return res
+
+
+def _leer(img, zona, escala, sin_giro) -> list[dict]:
     h, w = img.shape[:2]
     ox = oy = 0
     if zona:
@@ -111,20 +161,31 @@ def leer(img, zona=None, escala: float | None = None) -> list[dict]:
         img = cv2.resize(img, None, fx=escala, fy=escala, interpolation=cv2.INTER_CUBIC)
     else:
         escala = 1.0
-    with _CERROJO:
-        motor = _cargar()
+    with _COND:                          # turno de este proceso (un motor por turno)
+        while not _LIBRES:
+            _COND.wait()
+        idx = _LIBRES.pop(0)
+    try:
+        motor = _cargar(idx)
         if motor is None:
             return []
         try:
-            with _TurnoPC():
-                r = motor(img)
+            with _TurnoPC(idx):
+                try:
+                    r = motor(img, use_cls=False) if sin_giro else motor(img)
+                except TypeError:
+                    r = motor(img)
         except Exception:                                  # noqa: BLE001
             return []
+    finally:
+        with _COND:
+            _LIBRES.append(idx)
+            _COND.notify()
     filas = []
     if _TIPO == "nuevo":
         if r is None or getattr(r, "txts", None) is None:
             return []
-        filas = list(zip(r.boxes, r.txts, r.scores))
+        filas = list(zip(r.boxes, r.txts, r.scores, strict=False))
     else:
         res = r[0] if isinstance(r, tuple) else r
         filas = [(b, t, s) for b, t, s in (res or [])]

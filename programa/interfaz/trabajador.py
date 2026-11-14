@@ -4,7 +4,27 @@ avisando a la ventana por una cola.
 from __future__ import annotations
 
 
-def trabajo_proceso(puerto, adb, cual, partidas, opc, cola, parada):
+def _publicar_detector(dev: str) -> None:
+    """Escribe el estado del detector (procesador o grafica) para la ventana.
+
+    Va a %LOCALAPPDATA%\\NovaBot\\detector_estado.json; la última cuenta que
+    escribe es la que se ve. Nunca lanza excepciones."""
+    try:
+        import os
+        import time as tm
+
+        from nucleo import config as _cfg
+        from nucleo.rutas import carpeta_datos
+        from vision import percepcion
+        est = percepcion.estado_detector()
+        est["t"] = tm.time()
+        est["cuenta"] = dev
+        _cfg.guardar(os.path.join(carpeta_datos(), "detector_estado.json"), est)
+    except Exception:                                   # noqa: BLE001
+        pass
+
+
+def trabajo_proceso(puerto, adb, cual, partidas, opc, cola, parada, pausa=None):
     """Se ejecuta en un PROCESO aparte por instancia: asi cada una usa su
     propio nucleo del procesador y van de verdad a la vez (con hilos, el
     reconocimiento de imagen de una frenaba a las demas)."""
@@ -33,12 +53,18 @@ def trabajo_proceso(puerto, adb, cual, partidas, opc, cola, parada):
     vivo = True
 
     def avisos():
+        t_det = 0.0
         while vivo:
             if motor is not None:
                 try:
                     cola.put(("st", puerto, dict(getattr(motor, "status", {}))))
                 except Exception:                   # noqa: BLE001
                     pass
+            # estado del detector para la pestaña Salud (cada 5 s basta: aqui
+            # ya esta cargado en este proceso; la ventana solo lee el archivo)
+            if tm.time() - t_det >= 5.0:
+                t_det = tm.time()
+                _publicar_detector(dev)
             tm.sleep(0.5)
 
     th.Thread(target=avisos, daemon=True).start()
@@ -48,8 +74,13 @@ def trabajo_proceso(puerto, adb, cual, partidas, opc, cola, parada):
         juego.Cosmomante.MULTIPLICADORES = bool(opc.get("mult", True))
         juego.Cosmomante.ASCENDER = bool(opc.get("ascender", True))
         sigilo.PiratasSigilo.DEFENSA = bool(opc.get("defensa", True))
-        normales.PiratasNormales.PARAR_MISION = bool(opc.get("parar_mision", True))
+        # la tarea suelta de piratas normales solo mata piratas: no entra en
+        # los eventos a mirar la mision (eso lo decide la Rutina con lo leido)
+        normales.PiratasNormales.PARAR_MISION = False
+        # salto con la flota al lado de cada pirata normal (Ajustes > Piratas)
+        normales.PiratasNormales.SALTO = bool(opc.get("salto_normales", False))
         ctrl = _adb.AdbController(dev, adb)
+        ctrl.pausa, ctrl.parada = pausa, parada     # «Pausar» de la tarjeta
         if cual == "piratas":
             motor = sigilo.PiratasSigilo(ctrl, log=apunta, stop=parada,
                                      atacar=opc["atacar"], usar_salto=opc["salto"])
@@ -67,11 +98,15 @@ def trabajo_proceso(puerto, adb, cual, partidas, opc, cola, parada):
                    "recompensas": recompensas.Recompensas, "eventos": eventos.RecogerEventos}[cual]
             motor = cls(ctrl, log=apunta, stop=parada)
             motor.run()
-        elif cual == "rutina":
-            motor = rutina.Rutina(ctrl, log=apunta, stop=parada,
+        elif cual in ("rutina", "ballenas"):
+            # «Solo ballenas» es la Rutina con solo ese paso: mismos ajustes y contador
+            clase = rutina.SoloBallenas if cual == "ballenas" else rutina.Rutina
+            motor = clase(ctrl, log=apunta, stop=parada,
                               normales=opc["normales"], usar_salto=opc["salto"],
                               que=opc.get("que"), ballenas_dia=opc.get("ballenas_dia", 2),
-                              ballenas=opc.get("ballenas"))
+                              ballenas=opc.get("ballenas"),
+                              roaming_tickets=opc.get("roaming_tickets", 0),
+                              horario=opc.get("horario"))
             motor.run()
         else:
             motor = roaming.Bot(ctrl, on_log=apunta, stop_event=parada)

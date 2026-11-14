@@ -108,7 +108,7 @@ class Experiencia:
 _EXP = None
 
 
-def experiencia() -> "Experiencia":
+def experiencia() -> Experiencia:
     global _EXP
     if _EXP is None:
         _EXP = Experiencia()

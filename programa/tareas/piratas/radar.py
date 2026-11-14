@@ -70,8 +70,14 @@ class _Radar:
         if p >= self.UMBRAL_ICONO:
             self.log(f"  Pruebo por 'Mas' ({p:.2f}).")
             self.ctrl.tap(donde)
-            time.sleep(1.5)
-            img = self.cap("menu_mas")
+            # en cuanto sale 'Buscar pirata' se sigue (antes: 1,5 s fijos)
+            img = self.esperar(lambda i: buscar_rotulo(i, "menu_pirata")[0] >= 0.60,
+                               2.0, 0.2, etiqueta="menu_mas")
+            if img is None:
+                img = self.cap("menu_mas")
+            else:
+                time.sleep(0.15)             # que acabe de abrirse el menu
+                img = self.cap("menu_mas")
             p2, donde2 = buscar_rotulo(img, "menu_pirata")
             if p2 >= 0.60:
                 self.ctrl.tap(donde2)

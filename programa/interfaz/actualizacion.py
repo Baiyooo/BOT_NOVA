@@ -32,6 +32,7 @@ class _Actualizacion:
                 if r == "codigo":
                     avisa("He instalado la versión nueva que había en Descargas; "
                           "la ventana se reinicia sola.")
+                    self.cola.put(("__aviso__", "ok|Versión nueva instalada: la ventana se reinicia sola."))
                 elif r == "conocimiento":
                     avisa("He añadido lo aprendido que traía el paquete (no empieza de cero).")
             except Exception as e:                       # noqa: BLE001
@@ -100,6 +101,7 @@ class _Actualizacion:
                 v1, v2 = actualizar.aplicar(ruta, self._carpeta(),
                                             log=lambda m: self.cola.put(("", m)))
                 self.cola.put(("", f"Actualizada la versión {v1} → {v2}. La ventana se reinicia sola."))
+                self.cola.put(("__aviso__", f"ok|Versión nueva instalada: {v1} → {v2}."))
             except actualizar.ErrorActualizar as e:
                 self.cola.put(("", f"NO se ha actualizado: {e}"))
             except Exception as e:                      # noqa: BLE001
@@ -161,6 +163,8 @@ class _Actualizacion:
             return
         for f in vivas:
             f.actualizar = True
+            # una cuenta en pausa vuelve a arrancar en pausa (solo el boton la reanuda)
+            f._pausa_antes = bool(getattr(f, "pausa", None) is not None and f.pausa.is_set())
             f.parada.set()
             f.lbl_estado.config(text="Actualizando…", fg=AMBAR)
         self.escribir("", "Cada instancia termina lo que está haciendo y sigue "
@@ -175,6 +179,8 @@ class _Actualizacion:
         vivas = [f.puerto for f in self.filas if f.en_marcha()]
         d = leer_prefs()
         d["reanudar"] = vivas
+        d["reanudar_en_pausa"] = [f.puerto for f in self.filas if f.en_marcha()
+                                  and getattr(f, "pausa", None) is not None and f.pausa.is_set()]
         guardar_prefs(d)
         for f in self.filas:
             if f.en_marcha():
@@ -203,5 +209,6 @@ class _Actualizacion:
         filas = [f for f in self.filas if f.puerto in puertos and not f.en_marcha()]
         if filas:
             self.escribir("", "Ventana actualizada: sigo con las tareas que iban.")
+        en_pausa = set(leer_prefs().get("reanudar_en_pausa", []))
         for f in filas:
-            self.empezar_fila(f)
+            self.empezar_fila(f, en_pausa=f.puerto in en_pausa)

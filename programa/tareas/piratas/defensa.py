@@ -109,9 +109,9 @@ class _Defensa:
     def esperar_fin_combate(self):
         """Espera a que el pirata quede destruido. Ni el viaje ni el combate
         duran un tiempo fijo (sin salto el viaje puede ser de minutos), asi
-        que se mira el icono rojo de combate cada 2 s: primero se espera a
+        que se mira el icono rojo de combate cada 1 s: primero se espera a
         que APAREZCA (dos veces seguidas: las flotas han llegado) y luego a
-        que DESAPAREZCA tres veces seguidas (el pirata ya esta destruido)."""
+        que DESAPAREZCA seis veces seguidas (el pirata ya esta destruido)."""
         self.status["estado"] = "combatiendo"
         self.log("  Espero a que lleguen las flotas y termine el combate...")
         t0 = time.time()
@@ -137,7 +137,7 @@ class _Defensa:
                 else:
                     self.status["estado"] = "flotas de camino"
             pasado = time.time() - t0
-            if visto and sin_icono >= 3:
+            if visto and sin_icono >= 6:
                 self.log(f"  Combate terminado ({pasado:.0f} s).")
                 return True
             if not visto and pasado > self.ESPERA_INICIO_COMBATE:
@@ -147,5 +147,5 @@ class _Defensa:
             if pasado > self.ESPERA_MAX_COMBATE:
                 self.log(f"  El combate sigue tras {pasado:.0f} s; sigo igualmente.")
                 return False
-            time.sleep(2.0)
+            time.sleep(1.0)
         return False

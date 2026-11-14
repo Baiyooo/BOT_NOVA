@@ -82,7 +82,33 @@ def ballena_en_zoom(img, umbral=0.38):
 _GEMA2D = None
 
 
+def lilas_primero(img, puntos, radio=14) -> list[tuple[int, int]]:
+    """Reordena (nunca anade ni quita) los puntos: primero los de icono con
+    tono lila (H 120-170, S 20-120, V>=160), despues los blancos. Orden
+    estable: dentro de cada grupo se mantiene el orden que traian."""
+    if not puntos:
+        return puntos
+    h, w = img.shape[:2]
+    r = max(4, int(radio * w / 1600.0))
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    def lila(p):
+        x0, y0 = max(0, p[0] - r), max(0, p[1] - r)
+        c = hsv[y0:p[1] + r + 1, x0:p[0] + r + 1]
+        if c.size == 0:
+            return 0
+        m = ((c[:, :, 0] >= 120) & (c[:, :, 0] <= 170) & (c[:, :, 1] >= 20)
+             & (c[:, :, 1] <= 120) & (c[:, :, 2] >= 160))
+        return 0 if m.sum() < 6 else 1
+
+    return sorted(puntos, key=lambda p: -lila(p))
+
+
 def gemas_2d(img, umbral=0.80) -> list[tuple[int, int]]:
+    return lilas_primero(img, _gemas_2d(img, umbral))
+
+
+def _gemas_2d(img, umbral=0.80) -> list[tuple[int, int]]:
     global _GEMA2D
     if _GEMA2D is None:
         _GEMA2D = imagen("ballenas", "gema_2d.png")
@@ -177,4 +203,4 @@ def gemas_candidatas(img, textos=None, sistema=False) -> list[tuple[int, int]]:
         return any(t["caja"][0] - 6 <= p[0] <= t["caja"][0] + t["caja"][2] + 6
                    and t["caja"][1] - 6 <= p[1] <= t["caja"][1] + t["caja"][3] + 6
                    for t in textos)
-    return [p for p in out if not en_texto(p)]
+    return lilas_primero(img, [p for p in out if not en_texto(p)])

@@ -82,7 +82,8 @@ class Cosmomante(_CosmomanteBase):
         self._guardar_pos(None, set(g.get("rec", [])))
 
     def _anotar(self, **kw):
-        import json, os
+        import json
+        import os
         try:
             base = os.path.join(os.path.dirname(carpeta_diag()), "cosmomante_log")
             os.makedirs(base, exist_ok=True)

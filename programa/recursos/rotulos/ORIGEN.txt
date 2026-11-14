@@ -1,0 +1,61 @@
+Siluetas de rotulos y botones del juego (mapas de bits 0/255).
+Las carga vision/recursos.py. Nombre del archivo = nombre del rotulo.
+Origen de cada una (notas que acompanaban al codigo):
+
+sigilo.png  -  Silueta del texto "Sigilo pirata" recortada del propio juego. Se guarda como mapa de bits comprimido para no arrastrar un archivo aparte.
+atacar.png  -  "Atacar", texto blanco del menu radial. Es la pulsacion que compromete las flotas, asi que se exige reconocerla antes de tocar nada.
+atras.png  -  "Atras", texto ambar de arriba a la izquierda.
+mira.png  -  Icono de la mira del boton "Buscar pirata" (barra de abajo).
+mas.png  -  Icono "+" del boton "Mas" de arriba, que abre el menu lateral.
+menu_pirata.png  -  Texto "Buscar pirata" dentro del menu lateral que abre "Mas".
+radar.png  -  Titulo "Radar" de la pantalla del radar: prueba de que esta abierta.
+seleccionar.png  -  Dialogo "Elige tu flota": texto "Seleccionar todo" (con su casilla a la izquierda) y el texto "OK" del boton de enviar. OJO: a la izquierda del OK esta "Salto de flota", que gasta moneda azul: el bot nunca lo pulsa.
+ok.png  -  Dialogo "Elige tu flota": texto "Seleccionar todo" (con su casilla a la izquierda) y el texto "OK" del boton de enviar. OJO: a la izquierda del OK esta "Salto de flota", que gasta moneda azul: el bot nunca lo pulsa.
+salto.png  -  Dialogo "Elige tu flota": texto "Seleccionar todo" (con su casilla a la izquierda) y el texto "OK" del boton de enviar. OJO: a la izquierda del OK esta "Salto de flota", que gasta moneda azul: el bot nunca lo pulsa.
+continuar.png  -  Alerta de "furia pirata" que puede salir tras pulsar Atacar: "El medidor de furia pirata esta lleno... Confirmas el ataque?" Botones "Ver" y "Continuar". Sacadas de capturas reales por ADB (1600x900).
+alerta.png  -  Alerta de "furia pirata" que puede salir tras pulsar Atacar: "El medidor de furia pirata esta lleno... Confirmas el ataque?" Botones "Ver" y "Continuar". Sacadas de capturas reales por ADB (1600x900).
+grupo.png  -  "Ataque de grupo" (menu del objetivo, por ADB)
+movimiento.png  -  "Movimiento en grupo" (menu de un hueco vacio del mapa, por ADB)
+seleccionar_adb.png  -  Dialogo de flotas visto por ADB (Seleccionar todo, Salto de flota, OK)
+salto_adb.png  -  Dialogo de flotas visto por ADB (Seleccionar todo, Salto de flota, OK)
+ok_adb.png  -  Dialogo de flotas visto por ADB (Seleccionar todo, Salto de flota, OK)
+marcador.png  -  "Marcador": ultima fila de cualquier menu de seleccion del mapa
+gratis.png  -  Recompensas (grabacion de la ventana a 1200 de ancho; ESTACION por ADB)
+diario.png  -  Recompensas (grabacion de la ventana a 1200 de ancho; ESTACION por ADB)
+recompensa.png  -  Recompensas (grabacion de la ventana a 1200 de ancho; ESTACION por ADB)
+recoger_nar.png  -  Recompensas (grabacion de la ventana a 1200 de ancho; ESTACION por ADB)
+login.png  -  Recompensas (grabacion de la ventana a 1200 de ancho; ESTACION por ADB)
+recoger_ver.png  -  Recompensas (grabacion de la ventana a 1200 de ancho; ESTACION por ADB)
+estacion.png  -  Recompensas (grabacion de la ventana a 1200 de ancho; ESTACION por ADB)
+diario_adb.png  -  Iconos de la base vistos por ADB
+recompensa_adb.png  -  Iconos de la base vistos por ADB
+flota_pirata.png  -  "Flota pirata": cartel del pirata normal (por ADB)
+icono_pirata.png  -  Simbolo del pirata normal en la vista del sistema (el de sigilo es distinto)
+cerrar_x.png  -  "X" fina de arriba a la derecha con la que se cierran las ventanas de eventos
+mas_lado.png  -  Simulacion (por ADB): "Mas" del lateral, icono "Simulacion", boton "Simulacion automatica" y su coste 0
+simulacion.png  -  Simulacion (por ADB): "Mas" del lateral, icono "Simulacion", boton "Simulacion automatica" y su coste 0
+sim_auto.png  -  Simulacion (por ADB): "Mas" del lateral, icono "Simulacion", boton "Simulacion automatica" y su coste 0
+cero.png  -  Simulacion (por ADB): "Mas" del lateral, icono "Simulacion", boton "Simulacion automatica" y su coste 0
+flota_mov.png  -  "Flota en movimiento" (rotulo grande abajo) y "Llamar" (menu de una flota PROPIA)
+llamar.png  -  "Flota en movimiento" (rotulo grande abajo) y "Llamar" (menu de una flota PROPIA)
+eventos.png  -  Cosmomante: "Eventos" de la base, fila de la lista, "Free" y "Inicio" del tablero
+free.png  -  Cosmomante: "Eventos" de la base, fila de la lista, "Free" y "Inicio" del tablero
+inicio.png  -  Cosmomante: "Eventos" de la base, fila de la lista, "Free" y "Inicio" del tablero
+cosmo_lista.png  -  Cosmomante: "Eventos" de la base, fila de la lista, "Free" y "Inicio" del tablero
+gratis_adb.png  -  "¡GRATIS!" de la base por ADB
+sistema.png  -  Boton "Sistema" de la vista de la base (por ADB): lleva a la vista del sistema
+elige.png  -  "Elige tu flota" (cabecera del dialogo de una sola flota, por ADB)
+pirata_rojo.png  -  Palabra "pirata" en rojo de la lista "Flota hostil" de la vista de batalla (ADB)
+recoger_todo.png  -  Recompensas de la base (crecimiento, Promotion Contract, Pase Nova), ADB 1600
+promotion.png  -  Recompensas de la base (crecimiento, Promotion Contract, Pase Nova), ADB 1600
+crecimiento.png  -  Recompensas de la base (crecimiento, Promotion Contract, Pase Nova), ADB 1600
+pase_nova.png  -  Recompensas de la base (crecimiento, Promotion Contract, Pase Nova), ADB 1600
+roaming_test.png  -  Recompensas de la base (crecimiento, Promotion Contract, Pase Nova), ADB 1600
+base_btn.png  -  Boton "Base" de la barra de arriba (mapa del sistema y galaxia)
+protocolo.png  -  Fila "Mision de protocolo" de la lista de eventos y pestana "Cosmomante" dentro
+cosmo_pestana.png  -  Fila "Mision de protocolo" de la lista de eventos y pestana "Cosmomante" dentro
+mision_cosmo.png  -  Boton "Mision de Cosmomante" del tablero y texto "flotas piratas" de sus misiones
+flotas_piratas.png  -  Boton "Mision de Cosmomante" del tablero y texto "flotas piratas" de sus misiones
+recoger_ev.png  -  Recompensas de eventos (capturas ADB del 30 oct, 1600 de ancho)
+recompensa_ev.png  -  Recompensas de eventos (capturas ADB del 30 oct, 1600 de ancho)
+puntos.png  -  Recompensas de eventos (capturas ADB del 30 oct, 1600 de ancho)

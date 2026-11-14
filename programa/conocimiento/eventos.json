@@ -1,0 +1,249 @@
+{
+ "eventos": {
+  "artefactos": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "la_civilizacion_def",
+     "texto": "La civilizacion deF"
+    },
+    {
+     "id": "vista_previa_del_bote",
+     "texto": "Vista previa del bote"
+    },
+    {
+     "id": "la_civilizacion_de_ar",
+     "texto": "La civilizacion de Ar"
+    }
+   ],
+   "nombre": "Artefactos"
+  },
+  "bendicion_celestial": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "destacamento_de_completa_15_misiones_reg",
+     "meta": 15,
+     "texto": "Destacamento de Completa 15 misiones regulares de destacamento para obtener recompensas"
+    },
+    {
+     "id": "produccion_de_completa_la_produccion_de_",
+     "meta": 40,
+     "texto": "Produccion de Completa la produccion de armas40veces"
+    },
+    {
+     "id": "produccion_de_completa_la_produccion_de_",
+     "meta": 40,
+     "texto": "Produccion de Completa la produccion de componentes 40 veces"
+    },
+    {
+     "id": "eliminate_40_stealth_pirates",
+     "meta": 40,
+     "texto": "Eliminate 40 Stealth Pirates"
+    },
+    {
+     "id": "explorar_qalaxia",
+     "texto": "Explorar qalaxia"
+    },
+    {
+     "id": "totalde30dia_s_minutos_usar_objetos_abri",
+     "meta": 6000000,
+     "texto": "totalde30dia(s) minutos Usar objetos Abrir 400 cajas Naves Construyeunafuerza de 6.000.000 flotas de naves"
+    },
+    {
+     "id": "naves_construye_una_fuerza_de_12_000_000",
+     "meta": 12000000,
+     "texto": "Naves Construye una fuerza de 12.000.000 flotas de naves Usa GEC Gasta 2.000 GEC"
+    },
+    {
+     "id": "usa_gec_gasta_10_000_gec",
+     "meta": 10000,
+     "texto": "Usa GEC Gasta 10.000 GEC"
+    },
+    {
+     "id": "usa_gec_gasta5_00ogec",
+     "meta": 500,
+     "texto": "Usa GEC Gasta5.00OGEC"
+    },
+    {
+     "id": "destruye_una_fuerza_de_flotas_piratas",
+     "texto": "Destruye una fuerza de flotas piratas"
+    }
+   ],
+   "nombre": "Bendicion celestial"
+  },
+  "corazon_carmesi": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "corazon_carmesi_santuario_de_la_hidra",
+     "texto": "Corazon Carmesi Santuario de la Hidra"
+    },
+    {
+     "id": "experiencia_de_fuerza",
+     "texto": "Experiencia de fuerza"
+    },
+    {
+     "id": "a_medidaqueavanzalaexploracion_dela_gala",
+     "texto": "A medidaqueavanzalaexploracion dela GalaxiadelaHidra, Finalmente llegan al corazon de la Corte, Carmesi: el Corazon Carmesi. Aqui, continuarandesvelandoel misteriodela"
+    },
+    {
+     "id": "punto_defuerza_huf_frente_aliado_de_hydr",
+     "texto": "Punto defuerza (HUF)Frente Aliado de Hydra (ROc)Comitede gestiondereliguias (HPL)Unionde conservacionde"
+    }
+   ],
+   "nombre": "Corazon Carmesi"
+  },
+  "eventos": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "la_civilizacion_de_f",
+     "texto": "La civilizacion de F"
+    },
+    {
+     "id": "vista_previa_del_bote",
+     "texto": "Vista previa del bote"
+    }
+   ],
+   "nombre": "eventos"
+  },
+  "eventos_de_intercambio": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "halloween",
+     "texto": "Halloween"
+    },
+    {
+     "id": "nucleo_de_deformacion",
+     "texto": "Nucleo de deformacion"
+    },
+    {
+     "id": "module_exchange_collection_2",
+     "meta": 2,
+     "texto": "Module Exchange Collection 2"
+    },
+    {
+     "id": "nucleo_de_la_pepiun",
+     "texto": "Nucleo de la pepiun"
+    }
+   ],
+   "nombre": "Eventos de intercambio"
+  },
+  "materiales_de_vacio": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "rayosgammasonelunicomododedesvelarsus_se",
+     "meta": 15,
+     "texto": "rayosgammasonelunicomododedesvelarsus secretos. Gana puntos por\"Materiales de vacio\".Gana 1punto por cada caja de energia oscura y 15 puntos por cada"
+    },
+    {
+     "id": "igratis",
+     "texto": "iGRATIS!"
+    },
+    {
+     "id": "rayos_gamma_son_el_unico_modo_de_desvela",
+     "meta": 1,
+     "texto": "rayos gamma son el unico modo de desvelar sus secretos. Gana puntos por \"Materiales de vacio\".Gana 1 punto por cada caja de energia oscura y 1s puntos por cada caja de materiales oscuros."
+    }
+   ],
+   "nombre": "Materiales de Vacio"
+  },
+  "neural_roaming": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "usa_gec_gasta2_000gec",
+     "meta": 2000,
+     "texto": "Usa GEC Gasta2.000GEC"
+    },
+    {
+     "id": "elimina_piratas_ocultos_eliminate3osteal",
+     "meta": 3,
+     "texto": "Elimina piratas ocultos Eliminate3OStealthPirates"
+    },
+    {
+     "id": "speed_up_speed_up_upgrades_for_a_total_o",
+     "meta": 4320,
+     "texto": "Speed Up Speed up upgrades for a total of 4.320 minutes"
+    }
+   ],
+   "nombre": "Neural Roaming"
+  },
+  "reflejo_de_vacio": {
+   "lector_v": 2,
+   "misiones": [
+    {
+     "id": "destacamento_de_exploracion_completa_6_m",
+     "meta": 6,
+     "texto": "Destacamento de exploracion Completa 6 misiones regulares de destacamento para obtenerrecompensas"
+    },
+    {
+     "id": "destruye_una_fuerzademasde_5_000_0o0flot",
+     "meta": 50000,
+     "texto": "Destruye una fuerzademasde 5.000.0o0flotas piratas Destacamento de exploracion Completa 18 misiones regulares de destacamentopara obtener recompensas"
+    },
+    {
+     "id": "produccion_de_componentes_completa_la_pr",
+     "texto": "Produccion de componentes Completa la produccion de"
+    },
+    {
+     "id": "gasta_10_000_gec",
+     "meta": 10000,
+     "texto": "Gasta 10.000 GEC"
+    },
+    {
+     "id": "actualizar_academia_actualiza_la_academi",
+     "meta": 100,
+     "texto": "Actualizar Academia Actualiza la academia 100 veces"
+    },
+    {
+     "id": "usar_objetos_abrir_100_cajas",
+     "meta": 100,
+     "texto": "Usar objetos Abrir 100 cajas"
+    },
+    {
+     "id": "explorar_galaxia_explora_0_planetas",
+     "texto": "Explorar galaxia Explora 0 planetas"
+    },
+    {
+     "id": "usoucl_gasta_10_000_gec",
+     "meta": 10000,
+     "texto": "USOUCL Gasta 10.000 GEC"
+    }
+   ],
+   "nombre": "Reflejo de vacio"
+  },
+  "santuario_de_la_hidra": {
+   "lector_v": 2,
+   "misiones": [
+    {
+     "id": "fase_de_preparacion",
+     "texto": "Fase de preparacion"
+    },
+    {
+     "id": "tarmesi_elcorazoncarmesi",
+     "texto": "tarmesi:elcorazoncarmesi."
+    }
+   ],
+   "nombre": "Santuario de la Hidra"
+  },
+  "tefactos": {
+   "lector_v": 3,
+   "misiones": [
+    {
+     "id": "la_civilizacion_de_f",
+     "texto": "La civilizacion de F"
+    },
+    {
+     "id": "vista_previa_del_bote",
+     "texto": "Vista previa del bote"
+    }
+   ],
+   "nombre": "tefactos"
+  }
+ },
+ "version": 1
+}

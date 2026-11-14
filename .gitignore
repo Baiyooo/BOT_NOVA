@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+
+# Lo aprendido (programa/conocimiento) SI va en el repositorio: es parte del
+# programa. Solo se ignoran sus temporales.
+programa/conocimiento/*.tmp
+programa/experiencia.json
+*.log
+*.tmp
+nova_check.png
+
+# Generados por los .bat y el actualizador
+NovaBot.lnk
+programa_copias/
+
+# Capturas de revision (pesadas; son material de prueba, no codigo)
+programa/pruebas/revision/*.png
+
+# Paquetes de actualizacion generados por EMPAQUETAR.bat
+paquetes/
+
+# Capturas de pruebas: traen pantallas con datos de cuenta; solo se guardan en local
+programa/pruebas/capturas/

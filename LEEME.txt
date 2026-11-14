@@ -1,0 +1,163 @@
+===============================================================
+  NOVABOT
+  Automatiza tareas de Nova Empire en BlueStacks, por ADB.
+  Todo funciona en el PC, sin conexion a ninguna IA.
+===============================================================
+
+
+COMO ESTA ORGANIZADO
+--------------------
+
+  BOT.bat          <-- el unico que hace falta: doble clic (o el acceso
+                   directo NovaBot del Escritorio) y se abre el bot, sin
+                   consola. La primera vez instala lo que falte (Python,
+                   librerias, ADB de BlueStacks). Al abrirse, el bot
+                   instala solo la version nueva que haya en Descargas,
+                   el lector de texto si falta y hace el diagnostico.
+                   BOT.bat texto        menu en modo texto
+                   BOT.bat diagnostico  informe del equipo en pantalla
+  EMPAQUETAR.bat   Crea NovaBot-<version>.zip en paquetes\ para pasarlo
+                   a otro equipo (lleva lo aprendido, nunca tus datos).
+  LEEME.txt        Esto.
+  programa\        El codigo. No hace falta abrirla.
+
+  Dentro de programa\:
+
+    main.py        Punto de entrada (lo usan todos los .bat).
+    nucleo\        Lo que no sabe nada del juego: conexion ADB, datos,
+                   rutas, registro de errores, estadisticas, actualizador.
+    vision\        Ver la pantalla: plantillas, mascaras de color,
+                   lectura de texto (OCR) y de cifras, pantallas.
+    tareas\        Actuar en el juego: una tarea por modulo o carpeta
+                   (piratas\, ballenas\, cosmomante\, recompensas...).
+    cerebro\       Decidir: la Rutina, su planificador y lo que se sabe
+                   de los eventos y sus misiones.
+    interfaz\      Mostrar: la ventana, el panel y el menu de texto.
+    recursos\      Imagenes de referencia (PNG) que busca el bot en la
+                   pantalla, y el icono.
+    pruebas\       Pruebas y scripts de revision (ver PRUEBAS mas abajo).
+    conocimiento\  Lo que el bot ha aprendido y que forma parte del
+                   programa: experiencia.json (escalas de botones, donde
+                   salen los piratas), eventos.json (que pide cada
+                   evento) y novabot_det.onnx (el detector de objetos).
+                   Viaja con la carpeta y en el paquete exportado, asi
+                   otro equipo no empieza de cero. No lleva nada de nadie.
+
+  Tus datos (ajustes, estadisticas, progreso, capturas, errores,
+  registros) NO estan aqui: viven en %LOCALAPPDATA%\NovaBot, en tu PC, y
+  no se tocan al actualizar ni van en el paquete.
+
+
+COMO USARLO
+-----------
+
+  Abre BOT.bat. Hay una tarjeta por cada instancia de BlueStacks:
+  eliges su tarea, el limite y le das a EMPEZAR. Cada instancia
+  trabaja en paralelo con las demas.
+
+  Tareas:
+
+    Rutina automatica   Decide sola que toca en cada momento: lee los
+                        eventos y sus misiones, hace lo diario al empezar
+                        y ataca piratas segun lo que pidan los eventos.
+                        Tambien las ballenas de eter, el destacamento de
+                        exploracion y llamar flotas paradas.
+    Piratas de sigilo   Los busca con el radar y los ataca con todas las
+                        flotas.
+    Piratas normales    Ataca piratas normales del sistema, una flota por
+                        pirata (las cuentas se reparten los objetivos).
+    Sigilo + normales   Normales sin parar y, cada 30 min, los de sigilo.
+    Recompensas diarias Suministros gratis, recompensa diaria y tareas
+                        diarias.
+    Recompensas eventos Recoge las recompensas de los eventos.
+    Cosmomante          Lee el mapa, juega con dados remotos e imanes,
+                        sube a nivel 6 y reclama las metas.
+    Roaming Test        Juega el minijuego del evento Neural Roaming.
+    Simulacion          Simulacion automatica de batalla, solo si es gratis.
+
+  Guarda lo que ve en %LOCALAPPDATA%\NovaBot\diag para poder revisar
+  cualquier fallo.
+
+
+LIMITES QUE NUNCA SE SALTA
+--------------------------
+
+  - Nunca gasta GEC, no construye naves, no abre cajas ni acelera.
+  - El analisis de eventos es de solo lectura: no compra, no recoge
+    y no ataca.
+  - Roaming Test: nunca pulsa el boton naranja con el tablero en
+    pantalla (es "Restart" y tiraria la partida y un ticket), ni la
+    esquina superior derecha (la X que cierra el evento). Como mucho
+    3 intentos de Start por partida; si dos partidas seguidas se
+    atascan, para y avisa.
+
+
+INSTALACION (en un ordenador nuevo)
+-----------------------------------
+
+  1. Copia la carpeta NovaBot entera (o descomprime el paquete).
+  2. Abre BOT.bat. La primera vez:
+       - instala Python si no esta (con winget; acepta si Windows pregunta)
+       - instala las librerias (opencv, numpy y el lector de texto)
+       - activa el ADB de BlueStacks (si BlueStacks esta abierto, lo
+         intenta otra vez la proxima vez que abras el bot con BlueStacks
+         cerrado; guarda una copia en bluestacks.conf.bak)
+     Las demas veces solo abre el bot.
+
+  No hace falta instalar ADB aparte: se usa el HD-Adb.exe que
+  ya viene con BlueStacks. Tampoco hay que configurar puertos:
+  se leen de bluestacks.conf al abrir la ventana.
+
+  Si el ADB no se activa solo, se activa a mano en BlueStacks:
+  Ajustes > Avanzado > Android Debug Bridge.
+
+  Si una instancia de BlueStacks esta cerrada o no da imagen, el bot lo
+  comprueba unas pocas veces (unos 2 minutos) y para esa cuenta.
+
+
+GRAFICA
+-------
+
+  El detector funciona en cualquier PC con el procesador (~50 ms por
+  imagen, 2 hilos). Si hay grafica, el bot la prueba una vez al empezar
+  y solo la usa si da lo mismo y va claramente mas rapida.
+
+
+PRUEBAS
+-------
+
+  Desde la carpeta programa:
+
+    python pruebas\regresion.py
+        Pasa todos los detectores de la vision por las capturas reales de
+        pruebas\capturas y avisa si algun resultado ha cambiado. Hazlo
+        despues de tocar una plantilla o un detector. Si el cambio era a
+        proposito, acepta los resultados nuevos con --guardar.
+
+    python pruebas\pruebas_panel.py
+        Prueba el panel y los ajustes de la ventana sin abrirla.
+
+    python pruebas\pruebas_sin_imagen.py
+        Instancia sin imagen: comprueba unas pocas veces y para la cuenta.
+
+    python pruebas\pruebas_ballenas_humo.py
+        Ciclos de ballenas con un BlueStacks falso (no toca el juego).
+
+
+PASAR UNA VERSION A OTRO EQUIPO
+-------------------------------
+
+  EMPAQUETAR.bat crea paquetes\NovaBot-<version>.zip con el codigo, los
+  recursos y lo aprendido (carpeta conocimiento), nunca tus datos. En el
+  otro equipo basta con dejar el zip en Descargas (o junto a BOT.bat) y
+  abrir el bot: se instala solo. Lo aprendido se junta con lo que ya
+  supiera ese equipo, no lo pisa. Si ese equipo tiene una version
+  anterior a la 1.1, copia la carpeta NovaBot entera.
+
+
+AVISO
+-----
+
+  Automatizar el juego y usar emuladores puede ir contra las
+  normas de Nova Empire y acarrear sanciones a las cuentas.
+  Usalo sabiendo eso.

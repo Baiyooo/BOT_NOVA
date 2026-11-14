@@ -1,0 +1,5 @@
+# Versiones probadas de NovaBot (27-30/10/2026, Python 3.12)
+opencv-python==5.0.0.93
+numpy==2.5.4
+# OCR local para el panel de Eventos Inteligentes (opcional si no se usa)
+rapidocr-onnxruntime==1.4.4

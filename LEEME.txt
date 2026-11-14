@@ -114,10 +114,9 @@ COMO USARLO
     Cosmomante          Lee el mapa, juega con dados remotos e imanes,
                         sube a nivel 6 y reclama las metas.
     Roaming Test        Juega el minijuego del evento Neural Roaming.
-    Recoleccion         Hace solo las tareas de recoger que marques en
-                        Ajustes > Recoleccion de la cuenta: suministros
-                        gratis, recompensas, destacamento, escombros y
-                        gemas del sistema (con la vista 2D o 3D de la cuenta).
+    Recoleccion         Recoge solo gemas y/o escombros del sistema, lo que
+                        marques en Ajustes > Recoleccion de la cuenta (con
+                        los drones libres y la vista 2D o 3D de la cuenta).
     Simulacion          Simulacion automatica de batalla, solo si es gratis.
 
   Guarda lo que ve en %LOCALAPPDATA%\NovaBot\diag para poder revisar

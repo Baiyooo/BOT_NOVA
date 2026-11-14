@@ -840,15 +840,16 @@ def _plan_proximo_dia(hora=2) -> float:
 
 
 class SoloRecoleccion(Rutina):
-    """Tarea unica «Recolección»: la Rutina con SOLO las tareas de recoger que se han
-    marcado en Ajustes > Recolección de la cuenta (como en la Rutina automatica, pero
-    con su propio juego de casillas): suministros gratis, recompensas de eventos y
-    diarias, destacamento, escombros del sistema y gemas del sistema.
+    """Tarea unica «Recolección»: recoge SOLO gemas y/o escombros del sistema, lo que se
+    marque en Ajustes > Recolección de la cuenta. Suministros gratis, recompensas y el
+    resto de la Rutina no las hace (eso es de la Rutina o de sus tareas sueltas).
 
-    Las gemas las recoge Ballenas.recoger_sueltas con la vista de la cuenta (2D o 3D)
-    cada CADA_GEMAS segundos si hay algun dron libre (o cuando se pide a mano)."""
+    Los escombros van por el planificador (los drones libres, cada ~10 min o cuando
+    vuelve un dron). Las gemas las recoge Ballenas.recoger_sueltas con la vista de la
+    cuenta (2D o 3D) cada CADA_GEMAS segundos si hay algun dron libre, o cuando se
+    piden a mano (menu «Mas» > Recoger gemas)."""
     NOMBRE = "Recolección"
-    COLECCION = ("gratis", "eventos", "recompensas", "destacamento", "escombros", "gemas")
+    COLECCION = ("escombros", "gemas")
     CADA_GEMAS = 5 * 60
 
     def __init__(self, ctrl, *a, **kw):
@@ -860,8 +861,7 @@ class SoloRecoleccion(Rutina):
         self.recoger_gemas = "gemas" in self._elegidas
         self.que = {k: k in self._elegidas for k in self.PASOS}
         self.que["gemas"] = False                 # las gemas van por _gemas_pedidas (vista de la cuenta)
-        # sin «Recompensas de eventos» no hace falta leer los eventos (ahorra minutos)
-        self._leido_sesion = "eventos" not in self._elegidas
+        self._leido_sesion = True                 # no hace falta leer los eventos para recoger
 
     def _gemas_pedidas(self, est) -> bool:
         """Gemas: por orden manual (Mas > Recoger gemas) o cada CADA_GEMAS con algun dron libre."""
@@ -875,7 +875,4 @@ class SoloRecoleccion(Rutina):
 
     def _decidir(self, est):
         acciones = super()._decidir(est)
-        permitidas = set(self._elegidas)
-        if "eventos" in self._elegidas:
-            permitidas.add("leer_eventos")
-        return [a for a in acciones if a.clave in permitidas]
+        return [a for a in acciones if a.clave in self._elegidas]

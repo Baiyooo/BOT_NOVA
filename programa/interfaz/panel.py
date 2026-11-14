@@ -249,18 +249,13 @@ PASOS_OTROS = ("ballenas", "cosmomante", "roaming", "artefactos", "bingo", "esco
 PASOS_CUENTA = PASOS_RUTINA + PASOS_PIRATAS + tuple((k, k) for k in PASOS_OTROS)
 _POR_DEFECTO = ("gratis", "eventos", "simulacion", "sigilo", "llamar_flotas", "destacamento",
                 "escombros")
-#  casillas de la tarea «Recolección» (propias de esa tarea, aparte de las de la Rutina)
+#  casillas de la tarea «Recolección»: solo gemas y escombros del sistema (lo demas es de la Rutina)
 PASOS_RECOLECCION = (
-    ("gratis", "Suministros gratis (cada 30 min)", ""),
-    ("eventos", "Recompensas de eventos", ""),
-    ("recompensas", "Recompensas diarias", ""),
-    ("destacamento", "Destacamento de exploración", ""),
-    ("escombros", "Escombros del sistema",
-     "Manda los drones libres a los escombros del sistema (mineral, aleación, cristal; nunca Núcleos)."),
     ("gemas", "Gemas del sistema",
-     "Cada 5 min, si hay algún dron libre, recoge las gemas del mapa con la vista (2D o 3D) de la cuenta."))
-RECOLECCION_DEFECTO = {"gratis": True, "eventos": True, "recompensas": False, "destacamento": False,
-                       "escombros": True, "gemas": True}
+     "Cada 5 min, si hay algún dron libre, recoge las gemas del mapa con la vista (2D o 3D) de la cuenta."),
+    ("escombros", "Escombros del sistema",
+     "Manda los drones libres a los escombros del sistema (mineral, aleación, cristal; nunca Núcleos)."))
+RECOLECCION_DEFECTO = {"gemas": True, "escombros": True}
 MARCAS = {"bot": ("●", "TEAL", "la hace el bot"), "manual": ("✋", "SUAVE", "la haces tú"),
           "espera": ("…", "AMBAR", "pendiente")}
 
@@ -750,9 +745,9 @@ def ventana_ajustes_cuenta(master, t: dict, titulo: str, actuales: dict, guardar
            for k, _t, _a in PASOS_RECOLECCION}
     h_re = hoja("Recolección")
     titulo_seccion(h_re, "Recolección", "AMBAR",
-                   "Qué hace esta cuenta cuando eliges la tarea «Recolección (a elegir)»: solo lo que "
-                   "marques aquí, igual que la Rutina automática pero solo recogiendo. Los drones y la "
-                   "vista (2D o 3D) son los de la pestaña Ballenas.")
+                   "Qué recoge esta cuenta cuando eliges la tarea «Recolección (a elegir)»: solo lo que "
+                   "marques aquí. Los suministros y las recompensas no van aquí (son de la Rutina). Los "
+                   "drones y la vista (2D o 3D) son los de la pestaña Ballenas.")
     for k, texto_r, ayuda_r in PASOS_RECOLECCION:
         casilla(h_re, texto_r, rec[k], ayuda_r)
 

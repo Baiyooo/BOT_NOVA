@@ -80,7 +80,8 @@ class _Ajustes:
                 "rutina": {**gen["rutina"], **(c.get("rutina") or {})},
                 "tickets": int(c.get("tickets", gen["tickets"]) or 0),
                 "horario": dict(c.get("horario") or {}),
-                "recoleccion": {**panel.RECOLECCION_DEFECTO, **(c.get("recoleccion") or {})}}
+                "recoleccion": {k: bool((c.get("recoleccion") or {}).get(k, v))
+                                for k, v in panel.RECOLECCION_DEFECTO.items()}}
 
     def _guardar_cuenta(self, puerto, campo, valor):
         """Cambia un ajuste de la Rutina de una cuenta (lo usa el panel remoto)."""

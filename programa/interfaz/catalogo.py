@@ -58,8 +58,8 @@ AYUDA_TAREA = {
     "cosmomante": "Tiradas gratis y metas; gasta dados solo si llega a nivel 6 (ajustes en Eventos).",
     "ballenas": "Solo ballenas de éter, con los mismos ajustes que la Rutina "
                 "(Ajustes > Ballenas: rol, pareja, robots y tope del día).",
-    "recoleccion": "Hace solo las tareas de recoger que marques en Ajustes > Recolección: suministros "
-                   "gratis, recompensas, destacamento, escombros y gemas del sistema.",
+    "recoleccion": "Recoge solo gemas y/o escombros del sistema, lo que marques en Ajustes > "
+                   "Recolección (con los drones libres y la vista 2D o 3D de la cuenta).",
     "rutina": "Decide sola qué toca en cada momento: lee los eventos y sus misiones, "
               "hace lo diario al empezar y ataca piratas según lo que pidan los eventos.",
 }

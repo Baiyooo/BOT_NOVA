@@ -71,6 +71,21 @@ ok("gemas: la primera vez (con drones libres) toca", r._gemas_pedidas({"gemas_t"
 ok("gemas: hace poco que se recogieron, no toca", r._gemas_pedidas({"gemas_t": time.time()}) is False)
 ok("gemas: desmarcadas, nunca", solo_esc._gemas_pedidas({"gemas_t": 0}) is False)
 
+# ---- «siguiente»: solo lo suyo, nunca la lectura de eventos (horas)
+ahora = time.time()
+est = {"gemas_t": ahora, "escombros_t": ahora, "lectura_t": ahora}
+sig = r._proxima_espera(est) - ahora
+ok(f"siguiente con gemas y escombros: {sig:.0f} s (<= 5 min)", 0 < sig <= 5 * 60 + 1)
+sig_g = solo_gem._proxima_espera({"gemas_t": ahora, "lectura_t": ahora}) - ahora
+ok(f"solo gemas: {sig_g:.0f} s", 0 < sig_g <= 5 * 60 + 1)
+sig_e = solo_esc._proxima_espera({"escombros_t": ahora, "lectura_t": ahora}) - ahora
+ok(f"solo escombros: {sig_e:.0f} s (<= 10 min)", 0 < sig_e <= 10 * 60 + 1)
+sig_n = ninguna._proxima_espera({"lectura_t": ahora}) - ahora
+ok(f"sin nada marcado: {sig_n:.0f} s (no horas)", 0 < sig_n <= 121)
+ok("la Rutina automatica sigue como siempre (cuenta la lectura de eventos)",
+   rutina.Rutina(Falso(), que={"sigilo": False, "gratis": False, "eventos": False})._proxima_espera(
+       {"lectura_t": ahora}) - ahora > 3600)
+
 # ---- los ajustes de la cuenta: solo dos casillas
 ok(f"casillas de Recolección: {[k for k, _t, _a in panel.PASOS_RECOLECCION]}",
    [k for k, _t, _a in panel.PASOS_RECOLECCION] == ["gemas", "escombros"]

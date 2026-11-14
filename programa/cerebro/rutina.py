@@ -269,7 +269,7 @@ class Rutina:
                 continue
             plan.append({"k": a.clave, "n": self.NOMBRES.get(a.clave), "e": "pendiente",
                          "m": a.motivo})
-        prox = _plan.proxima_espera(est, self.que)
+        prox = self._proxima_espera(est)
         self.status["plan"] = plan or [{"k": "espera", "n": "Esperando", "e": "espera", "m": ""}]
         self.status["sig_c"] = prox if not cola else 0
         self.status["sig_n"] = "siguiente tarea" if not cola else ""
@@ -677,6 +677,10 @@ class Rutina:
             self.log(f"  BlueStacks vuelve a responder (tras {minutos} min). Sigo con la Rutina.")
             self.status["estado"] = "en marcha"
 
+    def _proxima_espera(self, est) -> float:
+        """Cuando volvera a haber algo que hacer (lo que muestra la tarjeta como «siguiente»)."""
+        return _plan.proxima_espera(est, self.que)
+
     # ------------------------------------------------------------------ run --
     def run(self, ciclos: int = 0):
         activos = [self.NOMBRES.get(k, k) for k in self.PASOS if self.que.get(k)]
@@ -706,7 +710,7 @@ class Rutina:
                 continue
             self.status["estado"] = "esperando"
             self._publicar(est, None, cola)
-            fin = min(_plan.proxima_espera(est, self.que), time.time() + 120)
+            fin = min(self._proxima_espera(est), time.time() + 120)
             while time.time() < fin and not self.parado():
                 time.sleep(2)
                 self._tick()
@@ -876,3 +880,17 @@ class SoloRecoleccion(Rutina):
     def _decidir(self, est):
         acciones = super()._decidir(est)
         return [a for a in acciones if a.clave in self._elegidas]
+
+    def _proxima_espera(self, est) -> float:
+        """Solo lo de esta tarea: gemas cada CADA_GEMAS y escombros cada CADA_ESCOMBROS (o en cuanto
+        vuelve un dron). Sin esto saldria la proxima lectura de eventos (horas), que aqui no se usa."""
+        ahora = time.time()
+        cand = []
+        if self.recoger_gemas:
+            cand.append(est.get("gemas_t", 0) + self.CADA_GEMAS)
+        if "escombros" in self._elegidas:
+            cand.append(est.get("escombros_t", 0) + _plan.CADA_ESCOMBROS)
+            if est.get("_dron_vuelve"):
+                cand.append(est["_dron_vuelve"])
+        futuros = [c for c in cand if c > ahora]
+        return min(futuros) if futuros else ahora + 120

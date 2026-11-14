@@ -119,7 +119,7 @@ ok("barrido: desactivable", t._barrido_2d(3) == 0 and pasos == [])
 def sueltas(vista, tres_d):
     t = nueva(robots=7, sola=True, vista=vista)
     llamadas = []
-    t._sueltas_en_3d = lambda: llamadas.append("3d") or tres_d
+    t._sueltas_en_3d = lambda *a: llamadas.append("3d") or tres_d
     t._ver_gemas_2d = lambda: llamadas.append("2d") or 0
     t._restaurar_vista = t._ir_al_sistema = lambda *a, **k: None
     t._modo = lambda q: True

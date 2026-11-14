@@ -144,15 +144,17 @@ class _Recoger:
                 self._zoom_3d()
         return hechas
 
-    def recoger_gemas(self, cupo: int, radio: bool = False) -> int:
+    def recoger_gemas(self, cupo: int, radio: bool = False, limite_s: float | None = None) -> int:
         """En la vista del sistema en 2D: toca la gema, comprueba «Gema …» y
-        pulsa «Recoger»; vuelve con «Atrás» y sigue con la siguiente."""
+        pulsa «Recoger»; vuelve con «Atrás» y sigue con la siguiente. limite_s: tiempo
+        maximo del lote (se deja de mandar al pasarse; el resto va en el siguiente ciclo)."""
         hechas, probadas, lanzadas = 0, [], []
+        tope = time.time() + limite_s if limite_s else None
         lista = descartes.de_cuenta(self._cuenta_drones())
         with self._turno_drones() as cj:
             cupo = self._cupo_libre(cupo)
             for _ in range(cupo * 3 + 3):
-                if hechas >= cupo or self.parado():
+                if hechas >= cupo or self.parado() or (tope and time.time() > tope):
                     break
                 cj.renovar()
                 img = self.ctrl.capture()
@@ -452,26 +454,28 @@ class _Recoger:
         time.sleep(2.0)
         return True
 
-    def recoger_sueltas(self) -> int:
+    def recoger_sueltas(self, lote: int | None = None, limite_s: float | None = None) -> int:
         """Gemas que han quedado en el sistema (de ballenas anteriores, o de
         cualquier ballena: salen por todo el mapa): en la vista general del
         sistema en 2D (con zoom y zonas si hace falta) se mandan los drones a
         las que haya, hasta los robots libres de la cuenta. Las que ya esta
         recogiendo alguien se dejan. Respaldo: etiquetas 3D junto a donde murio
-        la ultima ballena (si se sabe)."""
+        la ultima ballena (si se sabe). lote: como mucho esas gemas por ciclo (Recoleccion
+        manda 6 seguidas en ~30 s y vuelve a empezar cuando regresan los drones)."""
         self.status["estado"] = "recogiendo gemas del sistema"
         hechas = 0
+        robots = min(self.robots, lote) if lote else self.robots
         try:
             if self.vista == "3d":                      # la vista elegida primero; si no sale nada, 2D
-                hechas = self._sueltas_en_3d()
+                hechas = self._sueltas_en_3d(robots)
                 if hechas:
                     self.log(f"Gemas del sistema (3D): mando drones a {hechas}.")
                     return hechas
             n = self._ver_gemas_2d()
             if n:
-                hechas = self.recoger_gemas(min(self.robots, n), radio=False)
-                if hechas < self.robots:                # quedan drones: gemas fuera de esta vista
-                    hechas += self._barrido_2d(self.robots - hechas)
+                hechas = self.recoger_gemas(min(robots, n), radio=False, limite_s=limite_s)
+                if hechas < robots and not (limite_s and hechas):   # quedan drones: gemas fuera de esta vista
+                    hechas += self._barrido_2d(robots - hechas)
                 self.log(f"Gemas del sistema: veo {n}, mando drones a {hechas}.")
             else:
                 self._restaurar_vista()
@@ -480,7 +484,7 @@ class _Recoger:
                 if punto:
                     self._muerte = tuple(punto)
                     if self._zoom_3d():
-                        hechas = self.recoger_por_etiquetas(self.robots)
+                        hechas = self.recoger_por_etiquetas(robots)
                 self.log(f"Gemas del sistema: no veo ninguna en 2D; por etiquetas 3D, {hechas}.")
         finally:
             self.status["recogidas"] += hechas
@@ -489,7 +493,7 @@ class _Recoger:
             self._modo(self.vista)
         return hechas
 
-    def _sueltas_en_3d(self) -> int:
+    def _sueltas_en_3d(self, robots: int | None = None) -> int:
         """Vista 3D: las etiquetas de las gemas solo se leen con zoom junto a un punto, asi que
         se va al de la ultima ballena muerta (si se sabe). Devuelve las mandadas."""
         sd = self.sync.leer()
@@ -497,7 +501,7 @@ class _Recoger:
         if not punto:
             return 0
         self._muerte = tuple(punto)
-        return self.recoger_por_etiquetas(self.robots) if self._zoom_3d() else 0
+        return self.recoger_por_etiquetas(robots or self.robots) if self._zoom_3d() else 0
 
     def _gemas_cerca2d(self, img, radio: bool = False):
         """Gemas en 2D, de la mas cercana al centro de la pantalla. Por defecto

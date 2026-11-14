@@ -107,6 +107,33 @@ ok("al empezar dice que va al visor del sistema, con la vista, y pasa a la Rutin
 ok("sin nada marcado avisa y no arranca", any("no hay nada marcado" in m for m in mensajes)
    and mensajes.count("RUTINA") == 1)
 
+# ---- lote de 6 gemas en ~30 s y vuelta a empezar cuando regresan los drones
+ok("lote de 6 gemas en 30 s", rutina.SoloRecoleccion.LOTE == 6 and rutina.SoloRecoleccion.LIMITE_LOTE == 30)
+ahora = time.time()
+original_oc = rutina.drones_ocupados
+r.b_robots = 7
+try:
+    rutina.drones_ocupados = lambda cuenta: [ahora + 200, ahora + 210, ahora + 220, ahora + 230, ahora + 240, ahora + 250]
+    sig = r._gemas_toca({"gemas_t": ahora - 60, "gemas_n": 6}) - ahora
+    ok(f"tras mandar 6, espera a que vuelvan (~{sig:.0f} s, no 5 min fijos)", 235 < sig < 245)
+    ok("antes de que vuelvan no toca", r._gemas_pedidas({"gemas_t": ahora - 60, "gemas_n": 6}) is False)
+    rutina.drones_ocupados = lambda cuenta: []
+    ok("con los drones de vuelta, toca otro lote", r._gemas_pedidas({"gemas_t": ahora - 60, "gemas_n": 6}) is True)
+    ok("no repite antes de 30 s", r._gemas_pedidas({"gemas_t": ahora - 5, "gemas_n": 6}) is False)
+    sig0 = r._gemas_toca({"gemas_t": ahora, "gemas_n": 0}) - ahora
+    ok(f"si no habia gemas, vuelve a mirar en 5 min ({sig0:.0f} s)", 295 < sig0 <= 300)
+finally:
+    rutina.drones_ocupados = original_oc
+
+# ---- gemas con aro azul (las recoge un compañero): no se tocan
+import numpy as np  # noqa: E402
+from tareas.ballenas import deteccion  # noqa: E402
+
+lienzo = np.zeros((900, 1600, 3), np.uint8)
+lienzo[400:420, 300:320] = (255, 120, 0)                  # azul vivo (BGR)
+ok("aro azul alrededor: es de un compañero", deteccion._azul_cerca(lienzo, (310, 410)) is True)
+ok("sin azul: libre", deteccion._azul_cerca(lienzo, (900, 500)) is False)
+
 # ---- los ajustes de la cuenta: solo dos casillas
 ok(f"casillas de Recolección: {[k for k, _t, _a in panel.PASOS_RECOLECCION]}",
    [k for k, _t, _a in panel.PASOS_RECOLECCION] == ["gemas", "escombros"]

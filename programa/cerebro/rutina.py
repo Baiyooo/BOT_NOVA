@@ -25,7 +25,7 @@ from cerebro import config_ballenas as _cb
 from tareas.cosmomante.juego import Cosmomante
 from tareas.eventos import RecogerEventos
 from cerebro.lector_eventos import LectorEventos
-from tareas.restos import drones_libres, proximo_dron_libre
+from tareas.restos import drones_libres, drones_ocupados, proximo_dron_libre
 from cerebro.memoria_eventos import Memoria
 from tareas.piratas.normales import PiratasNormales
 from tareas.piratas.sigilo import PiratasSigilo
@@ -392,7 +392,8 @@ class Rutina:
             t = self._tarea(Ballenas, **self._args_ballenas(lider, apoyo))
             for _k in ("ballenas", "gemas", "senuelos"):
                 t.status[_k] = 0
-            t.recoger_sueltas()
+            est["gemas_n"] = t.recoger_sueltas(lote=getattr(self, "LOTE", None),
+                                               limite_s=getattr(self, "LIMITE_LOTE", None))
             self._sumar_bal(t)
             self._rec_paso += int(t.status.get("recogidas", 0) or 0)
             est["gemas_t"] = time.time()
@@ -854,7 +855,9 @@ class SoloRecoleccion(Rutina):
     piden a mano (menu «Mas» > Recoger gemas)."""
     NOMBRE = "Recolección"
     COLECCION = ("escombros", "gemas")
-    CADA_GEMAS = 5 * 60
+    CADA_GEMAS = 5 * 60        # si no se encontro ninguna gema: volver a mirar pasado este rato
+    LOTE = 6                   # gemas por ciclo: se localizan y se mandan seguidas
+    LIMITE_LOTE = 30           # segundos que se tarda como mucho en mandar el lote
 
     def __init__(self, ctrl, *a, **kw):
         super().__init__(ctrl, *a, **kw)
@@ -873,9 +876,20 @@ class SoloRecoleccion(Rutina):
             return False
         if super()._gemas_pedidas(est):
             return True
-        if time.time() - est.get("gemas_t", 0) < self.CADA_GEMAS:
-            return False
-        return drones_libres(getattr(self.ctrl, "name", "inst"), self.b_robots) > 0
+        return self._gemas_toca(est) <= time.time()
+
+    def _gemas_toca(self, est) -> float:
+        """Cuando toca el siguiente lote de gemas: en cuanto han vuelto los drones del lote anterior
+        (los que haga falta para otro lote). Si el ultimo lote no encontro nada, cada CADA_GEMAS."""
+        t0 = est.get("gemas_t", 0)
+        if t0 and est.get("gemas_n", 1) == 0:
+            return t0 + self.CADA_GEMAS
+        cuenta = getattr(self.ctrl, "name", "inst")
+        necesarios = min(self.LOTE, max(1, self.b_robots))
+        ocupados = drones_ocupados(cuenta)
+        sobran = len(ocupados) - (self.b_robots - necesarios)
+        vuelven = ocupados[sobran - 1] if sobran > 0 else 0
+        return max(vuelven, t0 + 30)
 
     def _decidir(self, est):
         acciones = super()._decidir(est)
@@ -896,7 +910,7 @@ class SoloRecoleccion(Rutina):
         ahora = time.time()
         cand = []
         if self.recoger_gemas:
-            cand.append(est.get("gemas_t", 0) + self.CADA_GEMAS)
+            cand.append(self._gemas_toca(est))
         if "escombros" in self._elegidas:
             cand.append(est.get("escombros_t", 0) + _plan.CADA_ESCOMBROS)
             if est.get("_dron_vuelve"):

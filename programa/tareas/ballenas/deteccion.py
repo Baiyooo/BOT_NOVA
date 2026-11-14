@@ -198,7 +198,21 @@ def gemas_2d(img, umbral=0.80, pequenas=False) -> list[tuple[int, int]]:
     """Gemas libres en 2D. pequenas=True: el mapa esta alejado del todo (iconos de
     ~10 px) y ademas se buscan las manchas blancas aisladas (gemas fuera del
     sistema, que la plantilla no ve a ese tamano)."""
-    return lilas_primero(img, _gemas_2d(img, umbral, pequenas))
+    libres = [c for c in _gemas_2d(img, umbral, pequenas) if not _azul_cerca(img, c)]
+    return lilas_primero(img, libres)
+
+
+def _azul_cerca(img, p, radio: int = 22) -> bool:
+    """Las gemas con aro azul las esta recogiendo un compañero: no se tocan (y así no se pierden
+    pasos abriendo su menú). Cuenta píxeles de azul vivo alrededor del icono."""
+    h, w = img.shape[:2]
+    r = max(6, int(radio * w / 1600.0))
+    c = img[max(0, p[1] - r):p[1] + r + 1, max(0, p[0] - r):p[0] + r + 1]
+    if c.size == 0:
+        return False
+    hsv = cv2.cvtColor(c, cv2.COLOR_BGR2HSV)
+    azul = (hsv[:, :, 0] >= 95) & (hsv[:, :, 0] <= 118) & (hsv[:, :, 1] >= 130) & (hsv[:, :, 2] >= 140)
+    return int(azul.sum()) >= max(12, int(25 * (w / 1600.0) ** 2))
 
 
 _GEMA2D_BLANCA = None

@@ -115,6 +115,26 @@ ok("barrido: sin drones libres no mira nada", t._barrido_2d(0) == 0 and pasos ==
 t.BUSCAR_FUERA = False
 ok("barrido: desactivable", t._barrido_2d(3) == 0 and pasos == [])
 
+# ---- gemas sueltas (Recolección): la vista elegida primero; en 3D, si no sale nada, cae al 2D
+def sueltas(vista, tres_d):
+    t = nueva(robots=7, sola=True, vista=vista)
+    llamadas = []
+    t._sueltas_en_3d = lambda: llamadas.append("3d") or tres_d
+    t._ver_gemas_2d = lambda: llamadas.append("2d") or 0
+    t._restaurar_vista = t._ir_al_sistema = lambda *a, **k: None
+    t._modo = lambda q: True
+    t.sync.leer = lambda: {}
+    t.sync.del_otro = lambda: {}
+    return t.recoger_sueltas(), llamadas
+
+
+h3, ll3 = sueltas("3d", 3)
+ok(f"gemas sueltas en 3D con ballena reciente: {h3}, solo 3D {ll3}", h3 == 3 and ll3 == ["3d"])
+h3b, ll3b = sueltas("3d", 0)
+ok(f"gemas sueltas en 3D sin nada: prueba 3D y despues 2D {ll3b}", ll3b == ["3d", "2d"])
+h2, ll2 = sueltas("2d", 5)
+ok(f"gemas sueltas en 2D: no mira el 3D primero {ll2}", ll2 == ["2d"])
+
 # ---- la vista es un ajuste de CADA cuenta (Ajustes > Ballenas): 2D por defecto
 from cerebro import config_ballenas as cb  # noqa: E402
 

@@ -881,6 +881,15 @@ class SoloRecoleccion(Rutina):
         acciones = super()._decidir(est)
         return [a for a in acciones if a.clave in self._elegidas]
 
+    def run(self, ciclos: int = 0):
+        que = " y ".join(n for k, n in (("gemas", "gemas"), ("escombros", "escombros")) if k in self._elegidas)
+        if not que:
+            self.log("Recolección: no hay nada marcado. Marca «Gemas» y/o «Escombros» en Ajustes > Recolección.")
+            return
+        self.log(f"Recolección: voy al visor del sistema (vista {self.vista.upper()}) y recojo {que} con los "
+                 "drones libres; repito cada pocos minutos. Para pararla, pulsa PARAR.")
+        super().run(ciclos)
+
     def _proxima_espera(self, est) -> float:
         """Solo lo de esta tarea: gemas cada CADA_GEMAS y escombros cada CADA_ESCOMBROS (o en cuanto
         vuelve un dron). Sin esto saldria la proxima lectura de eventos (horas), que aqui no se usa."""

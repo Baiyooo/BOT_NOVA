@@ -86,6 +86,27 @@ ok("la Rutina automatica sigue como siempre (cuenta la lectura de eventos)",
    rutina.Rutina(Falso(), que={"sigilo": False, "gratis": False, "eventos": False})._proxima_espera(
        {"lectura_t": ahora}) - ahora > 3600)
 
+# ---- arranca de inmediato: el planificador propone los escombros nada mas empezar, y la tarea avisa
+ahora_ = time.time()
+prim = [a.clave for a in plan.decidir({"_leido_sesion": True, "_drones_libres": 3}, {"escombros": True}, None,
+                                      ahora=ahora_, opciones={})]
+ok(f"arranca de inmediato: escombros propuestos al empezar {prim}", "escombros" in prim)
+mensajes = []
+original_run = rutina.Rutina.run
+rutina.Rutina.run = lambda self, ciclos=0: mensajes.append("RUTINA")
+try:
+    r._log = lambda *a: mensajes.append(str(a[-1]))
+    r.run()
+    ninguna._log = lambda *a: mensajes.append(str(a[-1]))
+    ninguna.run()
+finally:
+    rutina.Rutina.run = original_run
+ok("al empezar dice que va al visor del sistema, con la vista, y pasa a la Rutina",
+   any("visor del sistema" in m and "2D" in m and "gemas y escombros" in m for m in mensajes)
+   and "RUTINA" in mensajes)
+ok("sin nada marcado avisa y no arranca", any("no hay nada marcado" in m for m in mensajes)
+   and mensajes.count("RUTINA") == 1)
+
 # ---- los ajustes de la cuenta: solo dos casillas
 ok(f"casillas de Recolección: {[k for k, _t, _a in panel.PASOS_RECOLECCION]}",
    [k for k, _t, _a in panel.PASOS_RECOLECCION] == ["gemas", "escombros"]

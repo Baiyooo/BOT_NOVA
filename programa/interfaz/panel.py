@@ -750,6 +750,15 @@ def ventana_ajustes_cuenta(master, t: dict, titulo: str, actuales: dict, guardar
                    "drones y la vista (2D o 3D) son los de la pestaña Ballenas.")
     for k, texto_r, ayuda_r in PASOS_RECOLECCION:
         casilla(h_re, texto_r, rec[k], ayuda_r)
+    fila_vista_r = tk.Frame(h_re, bg=t["PANEL"])
+    fila_vista_r.pack(fill="x", pady=(8, 3))
+    tk.Label(fila_vista_r, text="Vista", bg=t["PANEL"], fg=t["TEXTO"], width=16, anchor="w",
+             font=fuente(TAM_S)).pack(side="left")
+    desplegable(fila_vista_r, v_vista, list(vistas)).pack(side="left")      # la misma de la pestaña Ballenas
+    tk.Label(h_re, text="2D (radar): va por iconos con el sol de referencia. 3D: lee las etiquetas de las gemas "
+                        "junto a donde murió la última ballena; sin ballena reciente usa el 2D. Es el mismo "
+                        "ajuste que en la pestaña Ballenas.", bg=t["PANEL"], fg=t["SUAVE"],
+             font=fuente(TAM_XS), wraplength=460, justify="left").pack(anchor="w", pady=(0, 4))
 
     # ---- Opciones: Cosmomante y Roaming Test
     # (larga: con barra y rueda para bajar)

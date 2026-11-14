@@ -462,6 +462,11 @@ class _Recoger:
         self.status["estado"] = "recogiendo gemas del sistema"
         hechas = 0
         try:
+            if self.vista == "3d":                      # la vista elegida primero; si no sale nada, 2D
+                hechas = self._sueltas_en_3d()
+                if hechas:
+                    self.log(f"Gemas del sistema (3D): mando drones a {hechas}.")
+                    return hechas
             n = self._ver_gemas_2d()
             if n:
                 hechas = self.recoger_gemas(min(self.robots, n), radio=False)
@@ -483,6 +488,16 @@ class _Recoger:
             self._ir_al_sistema()
             self._modo(self.vista)
         return hechas
+
+    def _sueltas_en_3d(self) -> int:
+        """Vista 3D: las etiquetas de las gemas solo se leen con zoom junto a un punto, asi que
+        se va al de la ultima ballena muerta (si se sabe). Devuelve las mandadas."""
+        sd = self.sync.leer()
+        punto = sd.get("mi_ballena") or (self.sync.del_otro() or {}).get("mi_ballena")
+        if not punto:
+            return 0
+        self._muerte = tuple(punto)
+        return self.recoger_por_etiquetas(self.robots) if self._zoom_3d() else 0
 
     def _gemas_cerca2d(self, img, radio: bool = False):
         """Gemas en 2D, de la mas cercana al centro de la pantalla. Por defecto

@@ -183,7 +183,7 @@
     {
      "id": "mision_de_legion_completa_3_misiones_de__",
      "meta": 3,
-     "texto": "Completa 3 misiones de legion",
+     "texto": "Completa 3 misiones de legion Compra GEC Compra So O GEC",
      "titulo": "Misión de legion"
     }
    ],
@@ -299,6 +299,19 @@
     }
    ],
    "nombre": "De intercambio"
+  },
+  "eliminar_piratas": {
+   "info": "",
+   "lector_v": 3,
+   "limpieza": 3,
+   "misiones": [
+    {
+     "id": "piratas_eliminar_piratas_nos_informan_de",
+     "texto": "Eliminar piratas Nos informan de que unos piratas estan",
+     "titulo": "Piratas"
+    }
+   ],
+   "nombre": "Eliminar piratas"
   },
   "eventos_de_intercambio": {
    "lector_v": 3,

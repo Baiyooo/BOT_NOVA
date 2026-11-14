@@ -79,7 +79,8 @@ class _Ajustes:
         return {"opciones": {**gen["opciones"], **(c.get("opciones") or {})},
                 "rutina": {**gen["rutina"], **(c.get("rutina") or {})},
                 "tickets": int(c.get("tickets", gen["tickets"]) or 0),
-                "horario": dict(c.get("horario") or {})}
+                "horario": dict(c.get("horario") or {}),
+                "recoleccion": {**panel.RECOLECCION_DEFECTO, **(c.get("recoleccion") or {})}}
 
     def _guardar_cuenta(self, puerto, campo, valor):
         """Cambia un ajuste de la Rutina de una cuenta (lo usa el panel remoto)."""
@@ -97,8 +98,10 @@ class _Ajustes:
 
         def guardar(d):
             prefs = leer_prefs()
-            prefs.setdefault("cuentas", {})[p] = {"opciones": d["opciones"],
-                                                  "rutina": d["rutina"], "tickets": d["tickets"]}
+            c = prefs.setdefault("cuentas", {}).setdefault(p, {})   # se conserva el horario y lo demas
+            c.update({"opciones": d["opciones"], "rutina": d["rutina"], "tickets": d["tickets"]})
+            if isinstance(d.get("recoleccion"), dict):
+                c["recoleccion"] = d["recoleccion"]
             guardar_prefs(prefs)
             otra = self._guardar_pareja(p, d["ballenas"], d["rutina"].get("ballenas"))
             self.escribir(f"127.0.0.1:{f.puerto}", "Ajustes guardados." +
@@ -112,7 +115,7 @@ class _Ajustes:
             return memoria_eventos.Memoria(f"127.0.0.1:{f.puerto}").resumen()
         panel.ventana_ajustes_cuenta(self, self.tema, nombre,
                                      {**self.ajustes_de(p), "eventos": eventos, "obtener_eventos": obtener,
-                                      "pestana": "Ballenas" if f.tarea() == "ballenas" else ""},
+                                      "pestana": {"ballenas": "Ballenas", "recoleccion": "Recolección"}.get(f.tarea(), "")},
                                      guardar, cuentas=otras, ballenas=self._cfg_ballenas().get(p, {}))
 
     # ------------------------------------------------------ ballenas --
@@ -204,6 +207,7 @@ class _Ajustes:
         return {"programa": "NovaBot", "formato": 1,
                 "opciones": a["opciones"], "rutina": a["rutina"],
                 "tickets": a["tickets"], "horario": a.get("horario") or {},
+                "recoleccion": a.get("recoleccion") or {},
                 "ballenas": self._cfg_ballenas().get(str(puerto), {})}
 
     def _exportar_ajustes(self, f):
@@ -264,6 +268,8 @@ class _Ajustes:
                 c["tickets"] = max(0, int(d["tickets"]))
             except (TypeError, ValueError):
                 pass
+        if isinstance(d.get("recoleccion"), dict):
+            c["recoleccion"] = dict(d["recoleccion"])
         if isinstance(d.get("horario"), dict):
             if d["horario"]:
                 c["horario"] = dict(d["horario"])

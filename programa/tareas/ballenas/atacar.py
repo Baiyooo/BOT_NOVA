@@ -65,11 +65,17 @@ class _Atacar:
         if r is None:
             self._atras_rapido()
             return None
+        return self._fuerza_del_panel(r, aliado_nuestro)
+
+    def _fuerza_del_panel(self, r, aliado_nuestro=False, atras=None):
+        """De un panel de ballena ya abierto (img, items, d): su fuerza, o None
+        si la esta atacando otro jugador (y no es nuestra pareja). `atras` es lo
+        que se hace para cerrar el panel en ese caso."""
         img, items, _ = r
         self._ocupada = self.ocupada_por_otro(img)
         if self._ocupada and not aliado_nuestro:
             # otro jugador (un aliado) ya la esta atacando: no es la nuestra
-            self._atras_rapido()
+            (atras or self._atras_rapido)()
             return None
         f = self._busca(items, "fuerza")
         fuerza = None
@@ -78,6 +84,101 @@ class _Atacar:
             if n and n >= 1_000_000 and (fuerza is None or n > fuerza):
                 fuerza = n
         return fuerza or (1 if f else None)
+
+    # ------------------------------------------------ vista 2D (radar) --
+    def _abrir_ballena_2d(self, pos, aliado_nuestro=False):
+        """Vista 2D: toca el icono de la ballena mas cercana a `pos` (se vuelve a
+        detectar: el zoom o el centro pueden haber cambiado) y comprueba su panel
+        «Ballena de éter · Fuerza N». Devuelve la fuerza o None."""
+        for intento in range(3):
+            cand = self.ballenas_vistas_2d(completo=intento > 0)
+            if not cand:
+                continue
+            c = min(cand, key=lambda v: (v[0] - pos[0]) ** 2 + (v[1] - pos[1]) ** 2)
+            if (c[0] - pos[0]) ** 2 + (c[1] - pos[1]) ** 2 > 260 ** 2 and len(cand) > 1:
+                continue                                  # ninguna cerca: puede ser de otro jugador
+            self.ctrl.tap(self._real2d(c, getattr(self, "_sol2d", None)))   # a pantalla, con el sol de ahora
+            time.sleep(1.3)
+            r = self._panel_ballena(4, "panel_ballena")
+            if r is not None:
+                return self._fuerza_del_panel(r, aliado_nuestro, atras=self._atras_juego)
+            self._atras_juego()                           # lo tocado no era la ballena
+        return None
+
+    def _atacar_ballena_2d(self, ciclo: str, idx: int, pos, intento: int = 0) -> bool:
+        """Ataque en la vista 2D: sin salto junto a la ballena (el 2D no acerca la
+        camara). Se abre su panel, se espera a la otra cuenta (si hay pareja),
+        «Ataque de grupo» y la primera flota en «Elige tu flota»."""
+        aliado = self._otro_ya_ataco(ciclo, idx, intento)
+        fuerza = self._abrir_ballena_2d(pos, aliado_nuestro=aliado)
+        if fuerza is None:
+            if getattr(self, "_ocupada", False):
+                self.log(f"  La ballena {idx + 1} la está atacando otro jugador: no me meto.")
+            else:
+                self.log(f"  No veo la ballena {idx + 1} en {pos}.")
+            return False
+        self.log(f"  Ballena {idx + 1}: fuerza {fuerza:,}.".replace(",", "."))
+        clave = f"{ciclo}:{idx}:{intento}"
+        self.sync.escribir(listo=clave, listo_t=time.time(), llegada=None)
+        otro = {}
+        if not self.sola:
+            otro = self._esperar_pareja(clave, idx, intento)
+            if otro is None:
+                return False
+            if self.abrir_o_reabrir_2d(pos, ciclo, idx, intento) is None:
+                return False
+        img, items = self._ocr("menu_ballena", self.ZONA_MENU)
+        h, w = img.shape[:2]
+        g = self._busca(items, "ataque de grupo", w=w, h=h)
+        if not g:
+            g = next((d for d in items if ocr.normal(d["texto"]) == "ataque"
+                      and d["centro"][0] > w * 0.55), None)
+        if not g:
+            self.log("  No veo «Ataque de grupo» en el menú de la ballena.")
+            self._atras_juego()
+            return False
+        if not self.sola:              # con pareja, los dos tocan a la vez
+            t0 = max(self.sync.leer().get("listo_t", 0), otro.get("listo_t", 0)) + 2.0
+            while time.time() < t0 and not self.parado():
+                time.sleep(0.05)
+        self.ctrl.tap(g["centro"])
+        ok = self._dialogo_una_flota("ok")
+        if ok:
+            self.sync.escribir(enviado=clave, llegada=time.time() + 15)
+            self.log("  Ataque lanzado con la primera flota.")
+        else:
+            self.sync.escribir(llegada=time.time() + 15)
+        return ok
+
+    def abrir_o_reabrir_2d(self, pos, ciclo, idx, intento):
+        """Con pareja, el panel se cierra mientras se espera: lo abre otra vez."""
+        f = self._abrir_ballena_2d(pos, aliado_nuestro=self._otro_ya_ataco(ciclo, idx, intento))
+        if f is None:
+            self.log("  Otro jugador ha empezado a atacarla: no me meto." if getattr(self, "_ocupada", False)
+                     else "  Tras esperar no vuelvo a ver la ballena.")
+        return f
+
+    def _esperar_pareja(self, clave, idx, intento):
+        """Espera a que la otra cuenta este lista para el mismo ataque. Devuelve
+        su estado, o None si no llega, abandona o cambia de ballena."""
+        def se_va(d) -> bool:
+            if self.lider:
+                return False
+            return (d.get("fase") != "atacar" or d.get("objetivo") != idx
+                    or int(d.get("intento") or 0) != intento)
+
+        otro = self.sync.esperar(lambda d: d.get("listo") == clave or d.get("abandona") == clave
+                                 or se_va(d), 300, self.parado)
+        if otro is not None and otro.get("abandona") == clave:
+            self.log("  La otra cuenta no puede con esta ballena; no ataco solo.")
+            return None
+        if otro is not None and se_va(otro):
+            self.log("  La otra cuenta ha cambiado de ballena; dejo esta.")
+            return None
+        if otro is None:
+            self.log("  La otra cuenta no llega a tiempo; no ataco solo.")
+            return None
+        return otro
 
     @staticmethod
     def ocupada_por_otro(img) -> bool:
@@ -245,6 +346,8 @@ class _Atacar:
         lado de la ballena y despues la atacan a la vez con «Ataque de grupo»
         eligiendo esa misma flota. intento es el reintento de esta ballena
         (va en la sincronizacion para que la otra cuenta lo repita)."""
+        if getattr(self, "vista", "2d") == "2d":
+            return self._atacar_ballena_2d(ciclo, idx, pos, intento)
         aliado = self._otro_ya_ataco(ciclo, idx, intento)
         fuerza = self.abrir_ballena(pos, aliado_nuestro=aliado)
         if fuerza is None:
@@ -322,8 +425,10 @@ class _Atacar:
 
     def esperar_muerte(self, pos, maximo=480) -> bool:
         """Espera a que no quede rojo (ni circulo ni triangulo "!") donde
-        estaba la ballena, dos veces seguidas."""
+        estaba la ballena, dos veces seguidas. En 2D: que su icono ya no este."""
         time.sleep(20)
+        if getattr(self, "vista", "2d") == "2d":
+            return self._esperar_muerte_2d(pos, maximo)
         vacias, fin = 0, time.time() + maximo
         while time.time() < fin and not self.parado():
             self._quitar_salir()
@@ -338,6 +443,29 @@ class _Atacar:
             rojo = rojo_cerca(imgs, pos)
             vacias = 0 if rojo > 120 else vacias + 1
             if vacias >= 2:
+                return True
+            time.sleep(8)
+        return False
+
+    def _esperar_muerte_2d(self, pos, maximo=480) -> bool:
+        """En 2D la ballena esta muerta cuando su icono ya no sale en la vista del
+        sistema, dos comprobaciones seguidas. Solo cuenta si de verdad se ve la
+        vista del sistema (con «Mi estación»), no un menu, una carga o la galaxia."""
+        ausentes, fin = 0, time.time() + maximo
+        while time.time() < fin and not self.parado():
+            self._quitar_salir()
+            img, items = self._ocr("muerte_2d")
+            h, w = img.shape[:2]
+            en_sistema = bool(self._busca(items, "mi estacion", zona=(0.1, 0.85, 0.35, 1), w=w, h=h)
+                              and not self._busca(items, "atras", zona=(0, 0, 0.2, 0.15), w=w, h=h))
+            if not en_sistema:
+                self.mi_sistema()
+                time.sleep(2)
+                continue
+            vistas = self.ballenas_vistas_2d(completo=True)     # la misma vista que al detectarla
+            cerca_ = [v for v in vistas if (v[0] - pos[0]) ** 2 + (v[1] - pos[1]) ** 2 < 160 ** 2]
+            ausentes = 0 if cerca_ else ausentes + 1
+            if ausentes >= 2:
                 return True
             time.sleep(8)
         return False

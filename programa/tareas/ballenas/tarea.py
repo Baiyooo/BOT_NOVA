@@ -76,8 +76,12 @@ class Ballenas(_Invocar, _Atacar, _Recoger, Recompensas):
 
     def __init__(self, ctrl, log=None, stop=None, diag=True, lider="", apoyo="",
                  robots=None, tope_dia=2, hechas_hoy=0, preparar_grupo=True, grupo_actual=None,
-                 sola=False, reparar=True, con_gemas=True, con_escombros=True, minimos=None):
+                 sola=False, reparar=True, con_gemas=True, con_escombros=True, minimos=None,
+                 vista="2d"):
         super().__init__(ctrl, log=log, stop=stop, diag=diag)
+        #  vista del sistema en la que se detectan las ballenas y las gemas:
+        #  "2d" (por defecto) o "3d" (Ajustes > Vista de ballenas y gemas)
+        self.vista = str(vista).lower() if str(vista).lower() in ("2d", "3d") else "2d"
         self.con_escombros = con_escombros
         # minimo por tipo de escombro de ballena (unidades); ver config_ballenas.minimos_unidades
         self.minimos = dict(minimos) if minimos else {"mineral": 18_000_000, "cristal": 2_000_000,
@@ -349,8 +353,12 @@ class Ballenas(_Invocar, _Atacar, _Recoger, Recompensas):
         # 1) las gemas, por TODO el mapa (salen al azar); con pareja, un solo reparto
         total = self._gemas_ciclo(lider=True, muertas=muertas) if self.con_gemas else 0
         # 2) los escombros, solo junto a donde han muerto las ballenas de la tanda
-        if muertas:
+        if muertas and self.vista == "3d":
             self.recoger_escombros_muerte()
+        elif muertas:
+            # los puntos de muerte de la vista 2D no valen para el mapa 3D donde se
+            # recogen los escombros: los recoge la pasada normal de escombros
+            self.log("  Escombros de las ballenas: los recoge la pasada normal de escombros.")
         final = self.hechas_hoy + muertas >= self.tope_dia
         self.sync.escribir(fase="hecho", fin=time.time(), final=final)
         self.log(f"Ballenas: {muertas} muerta(s), {total} gema(s) a recoger.")
@@ -361,7 +369,16 @@ class Ballenas(_Invocar, _Atacar, _Recoger, Recompensas):
     def _modo(self, quiero: str) -> bool:
         """Cambia la vista del sistema a '2d' o '3d' con el boton del panel
         lateral (2D / Ayuda / Recursos). El rotulo dice el modo al que pasa
-        («2D» = ahora estoy en 3D). El lector lee «2D» como «20»."""
+        («2D» = ahora estoy en 3D). El lector lee «2D» como «20».
+        Atajo: si se ve el sol del 2D, ya estoy en 2D y no hace falta leer nada."""
+        if quiero == "2d":
+            try:
+                from tareas.ballenas.deteccion import centro_sol_2d
+                if centro_sol_2d(self.ctrl.capture()) is not None:
+                    return True
+            except Exception:                                 # noqa: BLE001
+                pass
+
         def rotulo(items):
             for d in items:
                 t = ocr.normal(d["texto"]).replace(" ", "").replace("o", "0")
@@ -380,9 +397,11 @@ class Ballenas(_Invocar, _Atacar, _Recoger, Recompensas):
             if r is not None and r != quiero:
                 return True                       # ya estoy en el modo pedido
             if r == quiero:
-                # icono encima del rotulo (1600x900: rotulo y=573, icono y=622?) -> el icono
-                # esta DEBAJO del rotulo en este panel
-                self.ctrl.tap((d["centro"][0], d["centro"][1] + int(h * 0.055)))
+                # el icono esta siempre sobre y=622 (1600x900): en 3D el rotulo «2D» va
+                # ENCIMA de su icono (icono debajo) y en 2D el rotulo «3D» va DEBAJO
+                # (icono encima). Tocar al reves cae en «Galaxia» o la Estacion.
+                dy = int(h * 0.056) if r == "2d" else -int(h * 0.076)
+                self.ctrl.tap((d["centro"][0], d["centro"][1] + dy))
                 time.sleep(1.5)
                 return True
             if not abierto and intento == 0:
@@ -433,21 +452,39 @@ class Ballenas(_Invocar, _Atacar, _Recoger, Recompensas):
         from nucleo.adb import SinConexion
         try:
             self.status["estado"] = "llamando a las flotas"
-            self.mi_sistema()
+            self._ir_al_sistema()
             from tareas.flotas import LlamarFlotas
             LlamarFlotas(self.ctrl, log=self._log, stop=self.stop).run(1)
-            self.mi_sistema()
+            self._ir_al_sistema()
         except SinConexion:
             raise
         except Exception as e:                                # noqa: BLE001
             self.log(f"  No he podido llamar a las flotas ({e}); sigo.")
 
+    def _ir_al_sistema(self):
+        """Vista del sistema, sin pasos de mas: en 2D basta ver el sol (comprobacion
+        casi gratis) y en 3D un vistazo a «Estacion espacial» (plantilla). Solo si no
+        se reconoce ninguna de las dos se hace el camino completo de mi_sistema()."""
+        try:
+            img = self.ctrl.capture()
+            if self.vista == "2d":
+                from tareas.ballenas.deteccion import centro_sol_2d
+                if centro_sol_2d(img) is not None:
+                    return
+            else:
+                from tareas.flotas import localizar
+                if localizar(img, "estacion")[0] >= 0.80:
+                    return
+        except Exception:                                     # noqa: BLE001
+            pass
+        self.mi_sistema()
+
     def _vista_matar(self):
-        """Matar se hace en 3D y con el zoom normal del sistema (ver_ballenas,
-        anillos_rojos y ballenas_por_forma estan calibrados asi): se deshace
-        cualquier zoom o modo 2D que haya dejado una recogida."""
+        """Matar se hace en la vista elegida (2D por defecto; ver self.vista) y
+        con el zoom normal del sistema: se deshace cualquier zoom o cambio de
+        modo que haya dejado una recogida."""
         self._zoom_normal()
-        self._modo("3d")
+        self._modo(self.vista)
         self.mi_sistema()
 
     RADIO_ESCOMBROS = 0.25            # fraccion del ancho alrededor del punto de muerte
@@ -543,6 +580,8 @@ class Ballenas(_Invocar, _Atacar, _Recoger, Recompensas):
         descartes que los escombros de siempre (RecogerRestos)."""
         if not self.con_escombros or self.parado():
             return 0
+        if self.vista == "2d":
+            return 0        # los puntos de muerte de 2D no sirven en el mapa 3D de esta recogida
         if puntos is None:
             puntos = list(getattr(self, "_muertes", None) or
                           ([tuple(self._muerte)] if getattr(self, "_muerte", None) is not None else []))
@@ -587,7 +626,7 @@ class Ballenas(_Invocar, _Atacar, _Recoger, Recompensas):
                 self._restaurar_vista()
         finally:
             self._restaurar_vista()
-            self._modo("3d")                      # matar / buscar ballenas se hace en 3D
+            self._modo(self.vista)                # matar / buscar ballenas, en la vista elegida
             self.mi_sistema()
         if n:
             self.log(f"  Escombros de la ballena: {n} recogida(s) con los drones.")

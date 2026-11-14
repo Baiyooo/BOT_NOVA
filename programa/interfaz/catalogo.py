@@ -17,6 +17,7 @@ TAREA_GRUPOS = (
     ("Recompensas", ("Recompensas diarias", "Recompensas de eventos")),
     ("Cosmomante", ("Cosmomante",)),
     ("Ballenas", ("Solo ballenas",)),
+    ("Recolección", ("Recolección (a elegir)",)),
     ("Minijuegos y otros", ("Roaming Test", "Simulación")),
 )
 TAREA_FILA = {"Piratas de sigilo": "piratas",
@@ -24,7 +25,8 @@ TAREA_FILA = {"Piratas de sigilo": "piratas",
               "Piratas: sigilo + normales": "mixto", "Roaming Test": "roaming",
               "Recompensas diarias": "recompensas", "Recompensas de eventos": "eventos",
               "Simulación": "simulacion", "Cosmomante": "cosmomante",
-              "Rutina automática": "rutina", "Solo ballenas": "ballenas"}
+              "Rutina automática": "rutina", "Solo ballenas": "ballenas",
+              "Recolección (a elegir)": "recoleccion"}
 
 
 NOMBRE_TAREA = {v: k for k, v in TAREA_FILA.items()}
@@ -34,15 +36,16 @@ TAREAS = {"roaming": "Roaming Test", "piratas": sigilo.PiratasSigilo.NOMBRE,
           "normales": normales.PiratasNormales.NOMBRE, "recompensas": recompensas.Recompensas.NOMBRE,
           "simulacion": recompensas.Simulacion.NOMBRE, "rutina": rutina.Rutina.NOMBRE,
           "cosmomante": juego.Cosmomante.NOMBRE, "mixto": mixto.PiratasMixto.NOMBRE,
-          "eventos": eventos.RecogerEventos.NOMBRE, "ballenas": rutina.SoloBallenas.NOMBRE}
+          "eventos": eventos.RecogerEventos.NOMBRE, "ballenas": rutina.SoloBallenas.NOMBRE,
+          "recoleccion": rutina.SoloRecoleccion.NOMBRE}
 
 
 #  Lo que cuenta el limite de cada tarea (None = no tiene limite que poner)
 UNIDAD = {"piratas": "búsquedas", "normales": "ataques", "roaming": "partidas", "mixto": None,
           "recompensas": None, "eventos": None, "simulacion": None, "cosmomante": None,
-          "rutina": None, "ballenas": None}
+          "rutina": None, "ballenas": None, "recoleccion": None}
 SIN_LIMITE = {"ballenas": "hasta el tope del día","recompensas": "una pasada", "eventos": "una pasada", "simulacion": "una pasada",
-              "cosmomante": "una pasada", "rutina": "hasta que la pares",
+              "cosmomante": "una pasada", "rutina": "hasta que la pares", "recoleccion": "hasta que la pares",
               "mixto": "hasta que la pares"}
 AYUDA_TAREA = {
     "piratas": "Busca piratas de sigilo con el radar y los ataca con todas las flotas.",
@@ -55,6 +58,8 @@ AYUDA_TAREA = {
     "cosmomante": "Tiradas gratis y metas; gasta dados solo si llega a nivel 6 (ajustes en Eventos).",
     "ballenas": "Solo ballenas de éter, con los mismos ajustes que la Rutina "
                 "(Ajustes > Ballenas: rol, pareja, robots y tope del día).",
+    "recoleccion": "Hace solo las tareas de recoger que marques en Ajustes > Recolección: suministros "
+                   "gratis, recompensas, destacamento, escombros y gemas del sistema.",
     "rutina": "Decide sola qué toca en cada momento: lee los eventos y sus misiones, "
               "hace lo diario al empezar y ataca piratas según lo que pidan los eventos.",
 }

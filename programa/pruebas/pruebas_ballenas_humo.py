@@ -40,7 +40,7 @@ for papel in ("invoca", "apoya"):
     parar = threading.Event()
     threading.Timer(8, parar.set).start()
     yo, otro = "5001", "5002"
-    t = Ballenas(Falso(), log=lambda *a: None, stop=parar,
+    t = Ballenas(Falso(), vista="3d", log=lambda *a: None, stop=parar,
                  lider=yo if papel == "invoca" else otro, apoyo=otro if papel == "invoca" else yo,
                  preparar_grupo=False)
     try:
@@ -55,7 +55,7 @@ for papel in ("invoca", "apoya"):
 # ---- solo ataca la ballena que ha invocado (nunca las de otros jugadores)
 def prueba_objetivo(antes, despues, invocadas=1):
     parar = threading.Event()
-    t = Ballenas(Falso(), log=lambda *a: None, stop=parar, lider="5001", apoyo="5002",
+    t = Ballenas(Falso(), vista="3d", log=lambda *a: None, stop=parar, lider="5001", apoyo="5002",
                  preparar_grupo=False, tope_dia=1)
     vistas = iter([antes] + [despues] * 5)
     atacadas = []
@@ -88,7 +88,7 @@ fallos += 0 if ok else 1
 def prueba_apoyo_reintento():
     parar = threading.Event()
     threading.Timer(8, parar.set).start()
-    t = Ballenas(Falso(), log=lambda *a: None, stop=parar, lider="5002", apoyo="5001",
+    t = Ballenas(Falso(), vista="3d", log=lambda *a: None, stop=parar, lider="5002", apoyo="5001",
                  preparar_grupo=False)
     t._preparar = lambda: None
     t.mi_sistema = lambda *a, **k: None
@@ -122,6 +122,7 @@ fallos += 0 if ok else 1
 
 # ---- modo SOLA: sin otra cuenta (no espera sync, ataca solo la nueva, recoge con todos los drones)
 def sola(**kw):
+    kw.setdefault("vista", "3d")
     t = Ballenas(Falso(), log=lambda *a: None, stop=threading.Event(), lider="5001", apoyo="",
                  preparar_grupo=False, sola=True, tope_dia=1, **kw)
 
@@ -176,7 +177,8 @@ fallos += 0 if ok else 1
 def prueba_sola_gemas(caso):
     """caso: «2d» (se ven a la primera), «zoom» (hay que alejar el mapa) o
     «3d» (en 2D no sale ninguna: respaldo por las etiquetas 3D)."""
-    t = sola(robots=6)
+    t = sola(robots=6, vista="2d")                # 2D primero y 3D de respaldo (la vista por defecto)
+    t.BUSCAR_FUERA = False                        # (el barrido de todo el mapa tiene su propia prueba)
     t._muerte = (700, 450)
     modos, zooms, pedidos = [], [], []
     t._modo = lambda q: modos.append(q) or True
@@ -213,7 +215,7 @@ ok = (p2 == [("2d", 5, False)] and z2 == [] and set(r2) == {False}    # todo el 
       and pz == [("2d", 5, False)] and zz == [False, True] and True in cz   # alejar, detectar, y recentrar con mi_sistema
       and pa == [("2d", 5, False)] and len(ar) == 1 and True in ca    # zona con arrastre: recentra, no deshace a ciegas
       and ac == []                                                    # estilo «click»: nunca arrastra
-      and p3 == [("3d", 6)] and z3 == [False, True] and "zoom3d" in m3 and m3[-1] == "3d"   # respaldo 3D y acaba en 3D
+      and p3 == [("3d", 6)] and z3 == [False, False, True, True] and "zoom3d" in m3 and m3[-1] == "2d"   # respaldo 3D y acaba en la vista elegida (2D)
       and len(a3) == 4)                                               # sin gemas en ningun sitio: recorre las 4 zonas
 print(("OK   " if ok else "FALLO ") + f"gemas por todo el mapa: 2D {p2}, con zoom {pz} {zz}, por zonas {pa} {ar}, respaldo 3D {p3}")
 fallos += 0 if ok else 1
@@ -454,7 +456,7 @@ def prueba_flotas():
         def run(self, n=1):
             raise RuntimeError("sin flotas")
     orig = flotas.LlamarFlotas
-    t = Ballenas(Falso(), log=lambda *a: None, stop=threading.Event(), lider="5001", apoyo="", sola=True)
+    t = Ballenas(Falso(), vista="3d", log=lambda *a: None, stop=threading.Event(), lider="5001", apoyo="", sola=True)
     t.mi_sistema = lambda *a, **k: None
     try:
         flotas.LlamarFlotas = Falsa

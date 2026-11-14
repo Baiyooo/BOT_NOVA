@@ -4,8 +4,8 @@ from __future__ import annotations
 import time
 
 from cerebro.memoria_eventos import sin_acentos
-from vision import ocr
-from tareas.ballenas.deteccion import SLOT2, anillos_rojos, ballenas_por_forma
+from vision import conocimiento_vista, ocr
+from tareas.ballenas.deteccion import SLOT2, anillos_rojos, ballenas_2d, ballenas_por_forma, centro_sol_2d
 
 
 class _Invocar:
@@ -205,7 +205,119 @@ class _Invocar:
         time.sleep(1.0)
         return self.cap("sistema")
 
+    # --------------------------------------------- vista 2D (radar) --
+    def _asegurar_2d(self):
+        """Pone el mapa en 2D con los iconos de un tamano legible: se aleja del
+        todo (se ve el sistema entero) y se acerca un poco, con pellizcos suaves.
+        El mismo recorrido deja siempre la misma vista (las posiciones valen entre
+        una llamada y otra)."""
+        sol = centro_sol_2d(self.ctrl.capture())
+        if sol is None:                                   # si se ve el sol, ya estoy en 2D
+            self._modo("2d")
+            sol = centro_sol_2d(self.ctrl.capture())
+        if sol is None:
+            # el sol no se ve (el mapa esta muy desplazado): pasar a 3D y volver a 2D
+            # deja la camara centrada en el sol (mucho mas rapido que «Mi estacion»)
+            self._modo("3d")
+            self._modo("2d")
+            time.sleep(1.0)
+            sol = centro_sol_2d(self.ctrl.capture())
+        # el tamano del sol dice el zoom: a zoom medio (radio ~30-46 px) no hacen
+        # falta pellizcos
+        zoom = getattr(self.ctrl, "zoom", None)
+        cv = conocimiento_vista
+        if (sol is None or not cv.SOL_ZOOM_MEDIO[0] <= sol[2] <= cv.SOL_ZOOM_MEDIO[1]) and callable(zoom):
+            for acercar, fuerza in ((False, cv.PELLIZCO_SUAVE), (False, cv.PELLIZCO_SUAVE),
+                                    (True, cv.PELLIZCO_ACERCAR)):
+                if self.parado():
+                    return
+                zoom(acercar, fuerza=fuerza, pasos=cv.PELLIZCO_PASOS)
+                time.sleep(1.0)
+        # y siempre con el sol en el centro de la pantalla (referencia del mapa)
+        if not self._centrar_sol_2d() and centro_sol_2d(self.ctrl.capture()) is None:
+            self.mi_sistema(forzar=True)          # no se ve el sol: recentrar con «Mi estacion»
+
+    def _centrar_sol_2d(self) -> bool:
+        """Centra la camara en el sol: se mide cuanto separa el centro del sol del
+        centro de la pantalla y se arrastra el mapa esa distancia, despacio (un
+        arrastre rapido resbala). Hasta 3 correcciones. True si queda centrado."""
+        for intento in range(3):
+            if self.parado():
+                return False
+            sol = centro_sol_2d(self.ctrl.capture())
+            if sol is None:
+                return False
+            dx, dy = 800 - sol[0], 450 - sol[1]
+            if dx * dx + dy * dy <= 45 * 45:
+                return True
+            if intento == 0:
+                # tocar el sol centra la camara en el (y abre su menu, que se cierra con Atras)
+                self.ctrl.tap((int(sol[0]), int(sol[1])))
+                time.sleep(1.4)
+                self.ctrl.back()
+                time.sleep(0.8)
+                continue
+            if getattr(self.ctrl, "style", "drag") == "click":
+                return False                              # este control no sabe arrastrar
+            dx, dy = max(-450, min(450, dx)), max(-250, min(250, dy))
+            ms = getattr(self.ctrl, "drag_ms", 180)
+            try:
+                self.ctrl.drag_ms = 600
+                # el arrastre va por el medio de la pantalla, lejos de los paneles
+                self.ctrl.drag((int(800 - dx / 2), int(450 - dy / 2)), (int(800 + dx / 2), int(450 + dy / 2)))
+            finally:
+                self.ctrl.drag_ms = ms
+            time.sleep(0.8)
+        sol = centro_sol_2d(self.ctrl.capture())
+        return sol is not None and (sol[0] - 800) ** 2 + (sol[1] - 450) ** 2 <= 60 ** 2
+
+    #  El CENTRO DEL SOL es la referencia del mapa 2D: no cambia aunque se haga zoom
+    #  o se deslice el mapa. Las posiciones se guardan normalizadas a un sol de
+    #  referencia (centro de la pantalla, radio a zoom medio) y, para tocar, se
+    #  vuelven a convertir con el sol de ese momento.
+    SOL_REF = conocimiento_vista.SOL_REF
+
+    def _normal2d(self, p, sol):
+        if sol is None:
+            return (int(p[0]), int(p[1]))
+        f = self.SOL_REF[2] / sol[2]
+        return (int(self.SOL_REF[0] + (p[0] - sol[0]) * f), int(self.SOL_REF[1] + (p[1] - sol[1]) * f))
+
+    def _real2d(self, p, sol):
+        if sol is None:
+            return (int(p[0]), int(p[1]))
+        f = sol[2] / self.SOL_REF[2]
+        return (int(sol[0] + (p[0] - self.SOL_REF[0]) * f), int(sol[1] + (p[1] - self.SOL_REF[1]) * f))
+
+    def ballenas_vistas_2d(self, completo: bool = False) -> list[tuple[int, int]]:
+        """Ballenas que se ven ahora en 2D, sin tocar el zoom (varias capturas
+        juntas), con posiciones normalizadas respecto al centro del sol. El sol de
+        esta vista queda en self._sol2d (para pasar a pantalla con _real2d).
+        completo=True: antes se pone la vista de siempre con _asegurar_2d y, si
+        no sale ninguna, se aleja del todo."""
+        if completo:
+            self._asegurar_2d()
+        imgs = []
+        for _ in range(3):
+            imgs.append(self.ctrl.capture())
+            time.sleep(0.4)
+        vistas = ballenas_2d(imgs)
+        if not vistas and completo:
+            zoom = getattr(self.ctrl, "zoom", None)
+            if callable(zoom):                          # el sistema entero: iconos mas pequenos
+                zoom(False, fuerza=0.3, pasos=12)
+                time.sleep(1.5)
+                imgs = [self.ctrl.capture() for _ in range(3)]
+                vistas = ballenas_2d(imgs)
+        self._sol2d = centro_sol_2d(imgs[-1])
+        return [self._normal2d(v, self._sol2d) for v in vistas]
+
+    def _ver_ballenas_2d(self) -> list[tuple[int, int]]:
+        return self.ballenas_vistas_2d(completo=True)
+
     def ver_ballenas(self) -> list[tuple[int, int]]:
+        if getattr(self, "vista", "2d") == "2d":
+            return self._ver_ballenas_2d()
         imgs = []
         for _ in range(5):
             imgs.append(self.ctrl.capture())

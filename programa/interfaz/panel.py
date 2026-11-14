@@ -249,6 +249,18 @@ PASOS_OTROS = ("ballenas", "cosmomante", "roaming", "artefactos", "bingo", "esco
 PASOS_CUENTA = PASOS_RUTINA + PASOS_PIRATAS + tuple((k, k) for k in PASOS_OTROS)
 _POR_DEFECTO = ("gratis", "eventos", "simulacion", "sigilo", "llamar_flotas", "destacamento",
                 "escombros")
+#  casillas de la tarea «Recolección» (propias de esa tarea, aparte de las de la Rutina)
+PASOS_RECOLECCION = (
+    ("gratis", "Suministros gratis (cada 30 min)", ""),
+    ("eventos", "Recompensas de eventos", ""),
+    ("recompensas", "Recompensas diarias", ""),
+    ("destacamento", "Destacamento de exploración", ""),
+    ("escombros", "Escombros del sistema",
+     "Manda los drones libres a los escombros del sistema (mineral, aleación, cristal; nunca Núcleos)."),
+    ("gemas", "Gemas del sistema",
+     "Cada 5 min, si hay algún dron libre, recoge las gemas del mapa con la vista (2D o 3D) de la cuenta."))
+RECOLECCION_DEFECTO = {"gratis": True, "eventos": True, "recompensas": False, "destacamento": False,
+                       "escombros": True, "gemas": True}
 MARCAS = {"bot": ("●", "TEAL", "la hace el bot"), "manual": ("✋", "SUAVE", "la haces tú"),
           "espera": ("…", "AMBAR", "pendiente")}
 
@@ -482,6 +494,9 @@ def ventana_ajustes_cuenta(master, t: dict, titulo: str, actuales: dict, guardar
     v_reparar = tk.BooleanVar(value=ball["reparar"])
     v_gemas = tk.BooleanVar(value=ball["gemas"])
     v_escombros = tk.BooleanVar(value=ball["escombros"])
+    # vista del sistema en la que esta cuenta busca ballenas y gemas (2D por defecto)
+    vistas = {"2D (recomendada)": "2d", "3D": "3d"}
+    v_vista = tk.StringVar(value="3D" if ball.get("vista") == "3d" else "2D (recomendada)")
     # minimo (millones) de cada escombro de ballena: se guardan como texto y se leen con seguridad
     v_min = {k: tk.StringVar(value=f"{ball[f'min_{k}']:g}") for k in ("mineral", "cristal", "aleacion")}
     # robots de las ballenas: de 0 a 7 (cada cuenta tiene los suyos; por defecto 6)
@@ -699,6 +714,15 @@ def ventana_ajustes_cuenta(master, t: dict, titulo: str, actuales: dict, guardar
                         "cuenta queda emparejada con esta (y con las ballenas activadas).",
              bg=t["PANEL"], fg=t["SUAVE"], font=fuente(TAM_XS), wraplength=460,
              justify="left").pack(anchor="w", pady=(0, 4))
+    fila_vista = tk.Frame(h_ba, bg=t["PANEL"])
+    fila_vista.pack(fill="x", pady=3)
+    tk.Label(fila_vista, text="Vista", bg=t["PANEL"], fg=t["TEXTO"], width=16, anchor="w",
+             font=fuente(TAM_S)).pack(side="left")
+    desplegable(fila_vista, v_vista, list(vistas)).pack(side="left")
+    tk.Label(h_ba, text="Vista del sistema en la que esta cuenta busca ballenas y gemas. En 2D (radar) va por "
+                        "iconos con el sol de referencia; en 3D, por la forma de la ballena y las etiquetas de "
+                        "las gemas.", bg=t["PANEL"], fg=t["SUAVE"], font=fuente(TAM_XS), wraplength=460,
+             justify="left").pack(anchor="w", pady=(0, 4))
     campo(h_ba, "Ballenas al día", lambda p: numero(p, v_dia, 0, 40, 2))
     campo(h_ba, "Drones (robots)", lambda p: numero(p, v_rob, 0, max_robots))
     tk.Label(h_ba, text="El tope de ballenas al día no cuenta en «Ayuda a otra cuenta». Los drones "
@@ -720,6 +744,17 @@ def ventana_ajustes_cuenta(master, t: dict, titulo: str, actuales: dict, guardar
     casilla(h_ba, "Hacer ballenas en la Rutina", pas["ballenas"],
             "La tarea «Solo ballenas» (en el desplegable de la cuenta) no necesita esta "
             "casilla: usa este mismo modo.")
+
+    # ---- Recolección: qué recoge la tarea «Recolección» (como en la Rutina, a elegir)
+    rec = {k: tk.BooleanVar(value=bool((actuales.get("recoleccion") or {}).get(k, RECOLECCION_DEFECTO[k])))
+           for k, _t, _a in PASOS_RECOLECCION}
+    h_re = hoja("Recolección")
+    titulo_seccion(h_re, "Recolección", "AMBAR",
+                   "Qué hace esta cuenta cuando eliges la tarea «Recolección (a elegir)»: solo lo que "
+                   "marques aquí, igual que la Rutina automática pero solo recogiendo. Los drones y la "
+                   "vista (2D o 3D) son los de la pestaña Ballenas.")
+    for k, texto_r, ayuda_r in PASOS_RECOLECCION:
+        casilla(h_re, texto_r, rec[k], ayuda_r)
 
     # ---- Opciones: Cosmomante y Roaming Test
     # (larga: con barra y rueda para bajar)
@@ -758,7 +793,7 @@ def ventana_ajustes_cuenta(master, t: dict, titulo: str, actuales: dict, guardar
     for v in list(pas.values()) + list(ops.values()) + [v_rol, v_con, v_dia, v_rob, v_gemas, v_escombros, tickets, *v_min.values()]:
         v.trace_add("write", pintar_resumen)
     pintar_resumen()
-    libro.select(3 if actuales.get("pestana") == "Ballenas" else 1)   # Rutina, o Ballenas si viene de ahi
+    libro.select({"Ballenas": 3, "Recolección": 4}.get(actuales.get("pestana"), 1))   # Rutina, o la de la tarea
 
     def entero(var, defecto, lo, hi):
         try:
@@ -771,8 +806,10 @@ def ventana_ajustes_cuenta(master, t: dict, titulo: str, actuales: dict, guardar
         guardar({"opciones": {k: bool(v.get()) for k, v in ops.items()},
                  "rutina": {k: bool(v.get()) for k, v in pas.items()},
                  "tickets": entero(tickets, 0, 0, 99),
+                 "recoleccion": {k: bool(v.get()) for k, v in rec.items()},
                  "ballenas": {"rol": roles.get(v_rol.get(), "no"),
                               "con": por_nombre.get(v_con.get(), ""),
+                              "vista": vistas.get(v_vista.get(), "2d"),
                               "robots": entero(v_rob, 6, 0, max_robots),
                               "dia": entero(v_dia, 0, 0, 40),
                               "grupo": bool(v_grupo.get()), "reparar": bool(v_reparar.get()),

@@ -147,6 +147,7 @@ class _Instancias:
         opc["normales"] = bool(opc["que"].get("normales"))
         opc["roaming_tickets"] = int(a.get("tickets", 0) or 0)
         opc["horario"] = dict(a.get("horario") or {})      # franjas en las que no se hace cada tarea
+        opc["recoleccion"] = dict(a.get("recoleccion") or {})   # casillas de la tarea «Recolección»
         return opc
 
     def _firma_ajustes(self, f) -> str:
@@ -494,6 +495,9 @@ class _Instancias:
         if (self._n_tick % 7 == 1 and hasattr(self, "salud")
                 and getattr(getattr(self, "pestanas", None), "actual", "") == "salud"):
             self.salud.actualizar()                              # ~ cada 2 s, solo si se esta viendo
+        if (self._n_tick % 7 == 1 and hasattr(self, "guia")
+                and getattr(getattr(self, "pestanas", None), "actual", "") == "guia"):
+            self.guia.actualizar()                               # ADB e instancias de la guia
         if self._n_tick % 4 == 1:                       # ~ cada 1 s: cuentas atras
             self._pintar_eventos()
         res = f"{en_marcha} de {len(self.filas)} en marcha" if self.filas else ""

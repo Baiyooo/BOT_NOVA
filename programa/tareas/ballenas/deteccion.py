@@ -4,7 +4,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from vision import ocr
+from vision import conocimiento_vista, ocr
 from vision.recursos import imagen
 
 
@@ -52,6 +52,96 @@ def ballenas_por_forma(imgs, umbral=0.70) -> list[tuple[int, int]]:
                     continue
                 if all(abs(c[0] - o[0]) > 30 or abs(c[1] - o[1]) > 20 for o in out):
                     out.append(c)
+    return out
+
+
+#  Vista 2D del sistema (radar): la ballena es un rombo naranja con un triangulo
+#  dentro, de unos 28 px, siempre del mismo tamano (los iconos no escalan con el
+#  zoom). Se busca en el canal naranja para no depender del fondo; los piratas
+#  (otra silueta, naranja tambien) no llegan a 0.5 de parecido.
+_BALLENA_2D = None
+
+
+def centro_sol_2d(img):
+    """Centro del sol en la vista 2D: el disco blanco brillante del medio, con la
+    cruz de lineas del mapa. No se mueve con el zoom ni al deslizar el mapa mas
+    que junto con todo lo demas, asi que sirve de referencia para ubicar ballenas
+    y gemas. Devuelve (x, y, radio) en pixeles de la imagen, o None."""
+    h, w = img.shape[:2]
+    k = w / 1600.0
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    # el disco es gris claro (V ~130-160) con la estacion dorada dentro: se cuenta
+    # tambien lo dorado del interior para que el disco quede lleno
+    gris = (hsv[:, :, 1] < 50) & (hsv[:, :, 2] > 110)
+    oro = (hsv[:, :, 0] >= 15) & (hsv[:, :, 0] <= 30) & (hsv[:, :, 1] > 100) & (hsv[:, :, 2] > 150)
+    m = (gris | oro).astype(np.uint8) * 255
+    m[: int(h * 0.12), :] = 0
+    m[int(h * 0.85):, :] = 0
+    m[:, : int(w * 0.04)] = 0
+    m[:, int(w * 0.80):] = 0
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))   # fuera lineas y texto
+    n, _, st, cen = cv2.connectedComponentsWithStats(m)
+    mejor = None
+    for i in range(1, n):
+        x, y, bw, bh, area = st[i]
+        if not (20 * k <= bw <= 260 * k and 0.8 <= bw / float(bh) <= 1.25):
+            continue
+        if area / float(bw * bh) < 0.55:                  # un disco, no un marco
+            continue
+        if mejor is None or area > mejor[0]:
+            mejor = (area, (float(cen[i][0]), float(cen[i][1])), (bw + bh) / 4.0)
+    if mejor is not None and mejor[2] >= conocimiento_vista.SOL_RADIO_MIN * k:   # sol del sistema entero
+        return mejor[1][0], mejor[1][1], mejor[2]
+    return None
+
+
+def _naranja(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    m = (hsv[:, :, 0] >= 5) & (hsv[:, :, 0] <= 22) & (hsv[:, :, 1] > 150) & (hsv[:, :, 2] > 150)
+    return m.astype(np.float32)
+
+
+def ballenas_2d(imgs, umbral=0.62) -> list[tuple[int, int]]:
+    """Centros de las ballenas en la vista 2D del sistema (acepta una imagen o
+    varias; une lo visto). Escala 1600x900."""
+    global _BALLENA_2D
+    if imgs is None:
+        return []
+    if not isinstance(imgs, (list, tuple)):
+        imgs = [imgs]
+    if not imgs:
+        return []
+    if _BALLENA_2D is None:
+        _BALLENA_2D = _naranja(conocimiento_vista.icono("ballena_2d"))   # el icono vive en codigo
+    t0 = _BALLENA_2D
+    out = []
+    for img in imgs[:4]:
+        h, w = img.shape[:2]
+        k = w / 1600.0
+        mapa = _naranja(img)
+        mejores = []                                   # (parecido, centro) de todas las escalas
+        # los iconos del 2D crecen con el zoom del mapa: de 1x (todo el sistema)
+        # a ~2.6x (muy acercado)
+        for s in conocimiento_vista.ESCALAS_BALLENA_2D:
+            f = s * k
+            t = cv2.resize(t0, None, fx=f, fy=f, interpolation=cv2.INTER_NEAREST)
+            if t.shape[0] >= h or t.shape[1] >= w:
+                continue
+            r = cv2.matchTemplate(mapa, t, cv2.TM_CCOEFF_NORMED)
+            for _ in range(4):
+                _, mx, _, (px, py) = cv2.minMaxLoc(r)
+                if mx < umbral:
+                    break
+                a = int(14 * s)
+                r[max(0, py - a):py + a, max(0, px - a):px + a] = -1
+                mejores.append((mx, (px + t.shape[1] // 2, py + t.shape[0] // 2), s))
+        for mx, c, s in sorted(mejores, reverse=True):
+            # fuera los botones y paneles de los bordes
+            if not (w * 0.10 < c[0] < w * 0.92 and h * 0.10 < c[1] < h * 0.85):
+                continue
+            a = 22 * s
+            if all(abs(c[0] - o[0]) > a or abs(c[1] - o[1]) > a for o in out):
+                out.append(c)
     return out
 
 
@@ -104,29 +194,100 @@ def lilas_primero(img, puntos, radio=14) -> list[tuple[int, int]]:
     return sorted(puntos, key=lambda p: -lila(p))
 
 
-def gemas_2d(img, umbral=0.80) -> list[tuple[int, int]]:
-    return lilas_primero(img, _gemas_2d(img, umbral))
+def gemas_2d(img, umbral=0.80, pequenas=False) -> list[tuple[int, int]]:
+    """Gemas libres en 2D. pequenas=True: el mapa esta alejado del todo (iconos de
+    ~10 px) y ademas se buscan las manchas blancas aisladas (gemas fuera del
+    sistema, que la plantilla no ve a ese tamano)."""
+    return lilas_primero(img, _gemas_2d(img, umbral, pequenas))
 
 
-def _gemas_2d(img, umbral=0.80) -> list[tuple[int, int]]:
-    global _GEMA2D
+_GEMA2D_BLANCA = None
+
+
+def _gemas_2d(img, umbral=0.80, pequenas=False) -> list[tuple[int, int]]:
+    """Gemas en la vista 2D del sistema, a cualquier zoom: las blancas por
+    plantilla (la nueva, de zoom medio, y la vieja de zoom acercado a escala
+    pequena para el sistema entero); con pequenas=True, tambien manchas blancas
+    aisladas (gemas fuera del sistema, con el mapa alejado del todo)."""
+    global _GEMA2D, _GEMA2D_BLANCA
     if _GEMA2D is None:
         _GEMA2D = imagen("ballenas", "gema_2d.png")
+    if _GEMA2D_BLANCA is None:
+        _GEMA2D_BLANCA = conocimiento_vista.icono("gema_blanca_2d")    # el icono vive en codigo
     h, w = img.shape[:2]
     out = []
-    for s in (0.75, 0.85, 1.0, 1.15):
-        t = cv2.resize(_GEMA2D, None, fx=s * h / 900, fy=s * h / 900)
-        r = cv2.matchTemplate(img, t, cv2.TM_CCOEFF_NORMED)
-        for _ in range(12):
-            _, mx, _, (px, py) = cv2.minMaxLoc(r)
-            if mx < umbral:
-                break
-            r[max(0, py - 25):py + 25, max(0, px - 25):px + 25] = -1
-            c = (px + t.shape[1] // 2, py + int(t.shape[0] * 0.4))
-            if not (w * 0.1 < c[0] < w * 0.9 and h * 0.12 < c[1] < h * 0.85):
+
+    def anadir(c, a):
+        if not (w * 0.1 < c[0] < w * 0.9 and h * 0.12 < c[1] < h * 0.85):
+            return
+        if all(abs(c[0] - o[0]) > a or abs(c[1] - o[1]) > a for o in out):
+            out.append(c)
+
+    #  (plantilla, tamanos, parecido minimo, y del centro dentro de la plantilla)
+    pruebas = ((_GEMA2D_BLANCA, conocimiento_vista.ESCALAS_GEMA_BLANCA, conocimiento_vista.UMBRAL_GEMA_BLANCA, 0.5),
+               (_GEMA2D, (0.45, 0.5, 0.55, 0.6), 0.62, 0.4),
+               (_GEMA2D, (0.75, 0.85, 1.0, 1.15, 1.3), umbral, 0.4))
+    for plantilla, escalas, minimo, cy in pruebas:
+        for s in escalas:
+            t = cv2.resize(plantilla, None, fx=s * h / 900, fy=s * h / 900)
+            if t.shape[0] >= h or t.shape[1] >= w:
                 continue
-            if all(abs(c[0] - o[0]) > 25 or abs(c[1] - o[1]) > 25 for o in out):
-                out.append(c)
+            r = cv2.matchTemplate(img, t, cv2.TM_CCOEFF_NORMED)
+            a = max(20, int(0.55 * t.shape[1]))
+            for _ in range(12):
+                _, mx, _, (px, py) = cv2.minMaxLoc(r)
+                if mx < minimo:
+                    break
+                r[max(0, py - a):py + a, max(0, px - a):px + a] = -1
+                anadir((px + t.shape[1] // 2, py + int(t.shape[0] * cy)), a)
+    # (los iconos lila de color liso son depositos de recursos —Cristales, Mineral—,
+    # no gemas: no se cuentan)
+    if pequenas:
+        # sistema entero a la vista: el icono mide ~10 px y la plantilla no sirve.
+        # Respaldo por forma (aisladas); se confirman tocandolas (menu «Gema ...»)
+        for c in _gemas_pequenas(img):
+            anadir(c, 14)
+    return out
+
+
+def _gemas_pequenas(img) -> list[tuple[int, int]]:
+    """Gemas libres con el mapa alejado del todo: manchas blancas de 6-16 px,
+    aisladas, en la zona del mapa (sin los paneles ni las barras). Escala 1600x900."""
+    h, w = img.shape[:2]
+    k = w / 1600.0
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    blanca = ((hsv[:, :, 1] < 60) & (hsv[:, :, 2] > 190)).astype(np.uint8) * 255
+    blanca[: int(h * 0.26), :] = 0                      # barra de arriba, avisos y rotulos
+    blanca[int(h * 0.82):, :] = 0                       # barra de abajo
+    blanca[:, : int(w * 0.31)] = 0                      # datos y recursos de la izquierda
+    blanca[:, int(w * 0.74):] = 0                       # botones de la derecha
+    blanca = cv2.dilate(blanca, np.ones((3, 3), np.uint8))
+    n, _, st, cen = cv2.connectedComponentsWithStats(blanca)
+    # todo lo claro del mapa (estaciones, flotas, piratas...): una gema suelta
+    # fuera del sistema no tiene nada cerca
+    claro = (hsv[:, :, 2] > 150).astype(np.uint8) * 255
+    claro[: int(h * 0.26), :] = 0
+    claro = cv2.dilate(claro, np.ones((3, 3), np.uint8))
+    m, _, st2, cen2 = cv2.connectedComponentsWithStats(claro)
+    out = []
+    for i in range(1, n):
+        x, y, bw, bh, area = st[i]
+        if not (6 * k <= bw <= 18 * k and 6 * k <= bh <= 18 * k and area >= 25 * k * k
+                and 0.6 <= bw / float(bh) <= 1.6):
+            continue
+        c = (x + bw / 2, y + bh / 2)
+        solo = True
+        for j in range(1, m):
+            if st2[j][4] < 12 * k * k:
+                continue                          # polvo y estrellas
+            cx, cy = cen2[j]
+            if abs(cx - c[0]) <= bw and abs(cy - c[1]) <= bh:
+                continue                          # ella misma
+            if (cx - c[0]) ** 2 + (cy - c[1]) ** 2 < (70 * k) ** 2:
+                solo = False
+                break
+        if solo:
+            out.append((int(c[0]), int(c[1])))
     return out
 
 

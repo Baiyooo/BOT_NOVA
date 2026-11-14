@@ -96,7 +96,9 @@ def normalizar(cfg) -> dict:
     if rol in CON_PAREJA and not con:
         rol = "no"                          # sin pareja guardada no hay ballenas
     dia = c.get("dia")
+    vista = str(c.get("vista") or "2d").lower()          # vista del sistema: 2d (por defecto) o 3d
     return {"rol": rol, "con": con if rol in CON_PAREJA else "",
+            "vista": vista if vista in ("2d", "3d") else "2d",
             "robots": max(0, _entero(c.get("robots"), 6)),
             "dia": max(0, _entero(dia, 2)),         # si falta, 2 (un 0 puesto a mano se respeta)
             "grupo": bool(c.get("grupo", True)),

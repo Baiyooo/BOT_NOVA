@@ -32,7 +32,7 @@ def sin_fallos(app):
 app = ventana.App()
 sin_fallos(app)
 assert len(app.filas) == 4
-assert list(app.pestanas.paginas) == ["instancias", "eventos", "estadisticas", "registro", "salud", "ajustes"]
+assert list(app.pestanas.paginas) == ["instancias", "eventos", "estadisticas", "registro", "salud", "guia", "ajustes"]
 
 # estado falso en una tarjeta: Ahora / Siguiente, contadores, estado con icono
 f = app.filas[0]
@@ -209,6 +209,27 @@ app.adb = ""
 salud.reconectar(f0.puerto)
 sin_fallos(app)
 app.adb = None
+
+# recoleccion: casillas por cuenta (con valores por defecto) que viajan a las opciones del bot, y guardar
+# los ajustes de una cuenta no pierde el horario
+assert app.ajustes_de(f0.puerto)["recoleccion"]["gemas"] is True
+assert app._opciones_de(f0)["recoleccion"]["escombros"] is True
+d_ = preferencias.leer_prefs()
+d_.setdefault("cuentas", {}).setdefault(str(f0.puerto), {})["recoleccion"] = {"gemas": False}
+preferencias.guardar_prefs(d_)
+assert app._opciones_de(f0)["recoleccion"]["gemas"] is False
+assert app.ajustes_de(f0.puerto)["horario"]["sigilo"] == [[2, 8]]           # el horario sigue ahi
+assert app._datos_exportar(f0.puerto)["recoleccion"]["gemas"] is False
+
+# pestana BlueStacks: guia con sus pasos, sin nombres de cuenta, y comprobacion en vivo
+from interfaz import guia as guia_  # noqa: E402
+app.pestanas.mostrar("guia")
+sin_fallos(app)
+app.guia.actualizar()
+assert len(guia_.PASOS) >= 6 and any("1600" in t + " ".join(ls) for t, ls in guia_.PASOS)
+assert not any("127.0.0.1" in (t + " ".join(ls)) for t, ls in guia_.PASOS)      # nada de cuentas concretas
+assert set(app.guia.filas) == {"adb", "instancias", "conectadas"}
+assert all(lbl.cget("text") for lbl in app.guia.filas.values())
 
 # 4 tarjetas caben en 1080p sin desplazar (a 100 % de escala)
 alto_tarjetas = sum(t.winfo_reqheight() for t in app2.filas)

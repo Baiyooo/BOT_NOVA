@@ -17,6 +17,7 @@ from interfaz.ajustes import _Ajustes
 from interfaz.catalogo import NOMBRE_TAREA as TAREA_FILA_INV
 from interfaz.eventos import _PanelEventos
 from interfaz.graficas import Graficas
+from interfaz.guia import Guia
 from interfaz.instancias import _Instancias
 from interfaz.preferencias import guardar_prefs, leer_prefs
 from interfaz.puente_panel import _PuentePanel
@@ -71,7 +72,7 @@ class App(_Instancias, _Ajustes, _PanelEventos, _Registro, _PuentePanel, _Actual
     #  pestanas: (clave, icono, titulo)
     PESTANAS = (("instancias", "▣", "Instancias"), ("eventos", "★", "Eventos"),
                 ("estadisticas", "▤", "Estadísticas"), ("registro", "☰", "Registro"),
-                ("salud", "♥", "Salud"), ("ajustes", "⚙", "Ajustes"))
+                ("salud", "♥", "Salud"), ("guia", "?", "BlueStacks"), ("ajustes", "⚙", "Ajustes"))
 
     def __init__(self):
         _dpi_consciente()                            # antes de crear la ventana: nitida con 125 % / 150 %
@@ -112,6 +113,8 @@ class App(_Instancias, _Ajustes, _PanelEventos, _Registro, _PuentePanel, _Actual
         self.graficas.pack(fill="x", pady=(ESP_L, 0))
         self._registro(self.pag_registro)
         self._pagina_salud()
+        self.guia = Guia(self.zona_guia, self.tema, self)
+        self.guia.pack(fill="x")
         self._pagina_ajustes()
         self._sondear()
         self._preparar_equipo()
@@ -171,7 +174,7 @@ class App(_Instancias, _Ajustes, _PanelEventos, _Registro, _PuentePanel, _Actual
         pag = {k: self.pestanas.anadir(k, i, t) for k, i, t in self.PESTANAS}
         # Instancias, Eventos y Estadisticas: zonas que se bajan con la rueda
         zonas = {}
-        for k in ("instancias", "eventos", "estadisticas"):
+        for k in ("instancias", "eventos", "estadisticas", "guia"):
             d = Desplazable(pag[k], FONDO)
             d.pack(fill="both", expand=True)
             zonas[k] = d
@@ -179,6 +182,7 @@ class App(_Instancias, _Ajustes, _PanelEventos, _Registro, _PuentePanel, _Actual
         self.zona = zonas["instancias"].dentro
         self.zona_eventos = zonas["eventos"].dentro
         self.zona_estadisticas = zonas["estadisticas"].dentro
+        self.zona_guia = zonas["guia"].dentro
         self.pag_registro = pag["registro"]            # el registro se baja solo
         self.pag_salud = pag["salud"]
         self.pag_ajustes = pag["ajustes"]

@@ -5,8 +5,9 @@ import time
 
 from nucleo.cerrojo import Cerrojo
 from vision import ocr
+from vision import conocimiento_vista
 from tareas import descartes
-from tareas.ballenas.deteccion import BOTON_LADO, gemas_2d, lilas_primero
+from tareas.ballenas.deteccion import BOTON_LADO, centro_sol_2d, gemas_2d, lilas_primero
 
 
 class _Recoger:
@@ -146,7 +147,7 @@ class _Recoger:
     def recoger_gemas(self, cupo: int, radio: bool = False) -> int:
         """En la vista del sistema en 2D: toca la gema, comprueba «Gema …» y
         pulsa «Recoger»; vuelve con «Atrás» y sigue con la siguiente."""
-        hechas, probadas = 0, []
+        hechas, probadas, lanzadas = 0, [], []
         lista = descartes.de_cuenta(self._cuenta_drones())
         with self._turno_drones() as cj:
             cupo = self._cupo_libre(cupo)
@@ -157,15 +158,30 @@ class _Recoger:
                 img = self.ctrl.capture()
                 cand = [c for c in lista.filtrar(self._gemas_cerca2d(img, radio), img)
                         if not any(abs(c[0] - a) < 30 and abs(c[1] - b) < 30 for a, b in probadas)]
+                if lanzadas:
+                    # los robots que mande antes van por la linea del sol (la estacion) a su
+                    # gema: no se confunden con gemas (y se evita tocarlos y leer su menu)
+                    sol = centro_sol_2d(img)
+                    if sol is not None:
+                        cand = [c for c in cand if not self._en_ruta_de_robot(c, sol, lanzadas, img)]
                 if not cand:
                     break
                 c = cand[0]
                 probadas.append(c)
                 self.ctrl.tap(c)
                 time.sleep(1.3)
-                img2, items = self._ocr("gema", (0.1, 0.25, 0.98, 0.7))
+                # el menu de la gema (Recoger / Ver / Marcador) empieza hacia el 25 % de la altura
+                img2, items = self._ocr("gema", (0.1, 0.12, 0.98, 0.7))
                 h, w = img2.shape[:2]
-                if not any("gema" in ocr.normal(d["texto"]) for d in items):
+                es_gema = any("gema" in ocr.normal(d["texto"]) for d in items)
+                if not es_gema and any("recoger" in ocr.normal(d["texto"]) for d in items):
+                    # el lector a veces estropea el titulo («Gema gamma» -> «ewweb»):
+                    # se vuelve a leer solo esa zona con sus nombres posibles
+                    _, tit = self._ocr("gema_titulo", (0.2, 0.42, 0.52, 0.5))
+                    es_gema = any(any(k in ocr.normal(d["texto"]) for k in
+                                      ("gema", "gamma", "organic", "sagrad"))
+                                  for d in tit)
+                if not es_gema:
                     self.log("  Ahí no hay una gema (" + ", ".join(d["texto"] for d in items[:5]) + ").")
                     lista.anotar(c, img, "malo")
                     self._cerrar_menu_mapa()
@@ -189,10 +205,33 @@ class _Recoger:
                 self.ctrl.tap(d["centro"])
                 time.sleep(1.2)
                 lista.anotar(c, img, "mando")
+                lanzadas.append(c)
                 hechas += 1
                 self._dron_mandado()
                 self.log(f"  Drones a por una gema ({hechas}/{cupo}).")
         return hechas
+
+    @staticmethod
+    def _en_ruta_de_robot(c, sol, lanzadas, img, margen: float = 16.0) -> bool:
+        """¿El punto c esta sobre la linea sol -> gema de algun robot ya enviado (sin
+        ser la propia gema)? Escala 1600x900."""
+        k = img.shape[1] / 1600.0
+        for t in lanzadas:
+            sx, sy = sol[0], sol[1]
+            vx, vy = t[0] - sx, t[1] - sy
+            largo2 = vx * vx + vy * vy
+            if largo2 < 1:
+                continue
+            u = ((c[0] - sx) * vx + (c[1] - sy) * vy) / largo2     # posicion a lo largo de la ruta
+            if not 0.02 <= u <= 1.0:
+                continue
+            px, py = sx + u * vx, sy + u * vy
+            if (c[0] - px) ** 2 + (c[1] - py) ** 2 > (margen * k) ** 2:
+                continue
+            if (c[0] - t[0]) ** 2 + (c[1] - t[1]) ** 2 < (30 * k) ** 2:
+                continue                                           # es la propia gema
+            return True
+        return False
 
     def _cuenta_drones(self) -> str:
         return str(getattr(self.ctrl, "name", "inst"))
@@ -231,51 +270,105 @@ class _Recoger:
         time.sleep(2.0)                          # que aparezcan
         n = hechas = 0
         try:
-            # 1) lo preferido: modo 2D (sus iconos se detectan mejor que las etiquetas 3D),
-            #    con el zoom que haga falta; tras cada zoom se vuelve a capturar y detectar
-            n = self._ver_gemas_2d()
-            self.log(f"  Veo {n} gema(s) en 2D.")
-            if n:
-                if sola:
-                    cupo = min(self.robots, n)               # todos los drones
-                elif lider:
-                    self.sync.escribir(fase="gemas", n_gemas=n)
-                    cupo = min(self.robots, (n + 1) // 2)
+            # la vista elegida (Ajustes > Vista de ballenas y gemas) primero y la
+            # otra de respaldo: en 2D por sus iconos (con el zoom que haga falta;
+            # tras cada zoom se vuelve a capturar y detectar), en 3D por las
+            # etiquetas de cada gema junto a donde murio la ballena
+            orden = ("3d", "2d") if self.vista == "3d" else ("2d", "3d")
+            for modo in orden:
+                if modo == "2d":
+                    n, hechas = self._gemas_en_2d(lider, sola)
                 else:
-                    d = self.sync.esperar(lambda d: d.get("fase") in ("gemas", "hecho"), 600, self.parado)
-                    n = max(n, (d or {}).get("n_gemas", n))
-                    cupo = min(self.robots, max(1, n // 2)) if n else 0
-                hechas = self.recoger_gemas(cupo, radio=False) if cupo else 0
-            else:
-                # 2) respaldo: en 3D con zoom, por las etiquetas de cada gema (junto a la muerte)
-                self._restaurar_vista()
-                if self._zoom_3d():
-                    img, items = self._ocr("gemas_3d")
-                    n = sum(1 for d in items if self._es_gema(d["texto"]))
-                    self.log(f"  Veo {n} gema(s) con su etiqueta (3D).")
-                    hechas = self.recoger_por_etiquetas(self.robots) if n else 0
-                if lider and not sola:
-                    self.sync.escribir(fase="gemas", n_gemas=n)
+                    n, hechas = self._gemas_en_3d(lider, sola)
+                if n:
+                    break
+            if not n and lider and not sola:
+                self.sync.escribir(fase="gemas", n_gemas=0)
         finally:
             # pase lo que pase: vista normal del sistema (recentrando con mi_sistema, no
-            # fiandose de que acercar deshaga exactamente alejar) y en 3D para matar
+            # fiandose de que acercar deshaga exactamente alejar) y en la vista de matar
             self.status["gemas"] += hechas
             self.status["recogidas"] += hechas
             self._restaurar_vista()
-            self.mi_sistema()
-            self._modo("3d")
+            self._ir_al_sistema()
+            self._modo(self.vista)
         return n
 
+    BUSCAR_FUERA = True            # si quedan drones, barrer todo el mapa (ver _barrido_2d)
+
+    def _barrido_2d(self, libres: int) -> int:
+        """Quedan drones libres: se mira todo el mapa en dos vistas. 1) zoom medio
+        con el sol en el centro (iconos legibles, todo el anillo del sistema);
+        2) el sistema entero, para las gemas sueltas FUERA del anillo (manchas
+        blancas aisladas). Devuelve cuantas se han mandado."""
+        if not self.BUSCAR_FUERA or libres <= 0 or self.parado():
+            return 0
+        hechas = 0
+        self._pequenas = False
+        self._asegurar_2d()
+        if self._contar_gemas():
+            hechas += self.recoger_gemas(libres - hechas, radio=False)
+        if hechas < libres and not self.parado() and self._zoom_mapa(False):
+            self._zoom_mapa(False)
+            self._pequenas = True
+            if self._contar_gemas():
+                hechas += self.recoger_gemas(libres - hechas, radio=False)
+        return hechas
+
+    def _gemas_en_2d(self, lider: bool, sola: bool) -> tuple[int, int]:
+        """Vista 2D del sistema: cuenta los iconos y manda drones a las gemas.
+        Devuelve (vistas, recogidas)."""
+        n = self._ver_gemas_2d()
+        self.log(f"  Veo {n} gema(s) en 2D.")
+        if not n:
+            extra = self._barrido_2d(self.robots)
+            return extra, extra
+        # Se quieren recoger TODAS las gemas (sin prioridad): cada cuenta manda
+        # hasta todos sus drones libres. Con pareja no se parte el numero por la
+        # mitad: las gemas que ya recoge la otra cuenta se ven (barra,
+        # «Recogiendo» o movimiento) y se dejan, y el turno de drones compartido
+        # evita que las dos toquen la misma a la vez.
+        if lider and not sola:
+            self.sync.escribir(fase="gemas", n_gemas=n)
+        elif not lider and not sola:
+            d = self.sync.esperar(lambda d: d.get("fase") in ("gemas", "hecho"), 600, self.parado)
+            n = max(n, (d or {}).get("n_gemas", n))
+        cupo = min(self.robots, n)
+        hechas = self.recoger_gemas(cupo, radio=False) if cupo else 0
+        if cupo and hechas >= cupo and hechas < n:
+            self.log(f"  Quedan {n - hechas} gema(s) sin drones libres: "
+                     "se recogerán cuando vuelvan los drones.")
+        if hechas < self.robots:                        # quedan drones: gemas fuera de esta vista
+            extra = self._barrido_2d(self.robots - hechas)
+            hechas += extra
+            n = max(n, hechas)
+        return n, hechas
+
+    def _gemas_en_3d(self, lider: bool, sola: bool) -> tuple[int, int]:
+        """Vista 3D con zoom donde murio la ballena: cada gema lleva su etiqueta.
+        Devuelve (vistas, recogidas)."""
+        self._restaurar_vista()
+        n = hechas = 0
+        if self._zoom_3d():
+            img, items = self._ocr("gemas_3d")
+            n = sum(1 for d in items if self._es_gema(d["texto"]))
+            self.log(f"  Veo {n} gema(s) con su etiqueta (3D).")
+            if lider and not sola:
+                self.sync.escribir(fase="gemas", n_gemas=n)
+            hechas = self.recoger_por_etiquetas(self.robots) if n else 0
+        return n, hechas
+
     # ---- vista de recogida: 2D y zoom del mapa (ctrl.zoom, pellizco por sendevent)
-    ZOOM_FUERA = 0.5                              # fuerza del pellizco al alejar
+    ZOOM_FUERA = conocimiento_vista.PELLIZCO_SUAVE    # fuerza del pellizco al alejar (suave)
     _zoom_neto = 0                                # pellizcos de alejar sin deshacer
+    _pequenas = False                             # mapa alejado del todo: iconos de ~10 px
 
     def _zoom_mapa(self, acercar: bool) -> bool:
         """Acerca o aleja el mapa con el zoom del control. False si esta
         instancia no lo permite. Hay que volver a capturar y detectar despues:
         las coordenadas de antes ya no valen."""
         zoom = getattr(self.ctrl, "zoom", None)
-        if not callable(zoom) or not zoom(acercar, fuerza=self.ZOOM_FUERA):
+        if not callable(zoom) or not zoom(acercar, fuerza=self.ZOOM_FUERA, pasos=12):
             return False
         self._zoom_neto += 1 if acercar else -1
         time.sleep(1.5)
@@ -309,10 +402,17 @@ class _Recoger:
         sigue sin salir, recorre el mapa por zonas con arrastres (en la primera
         que haya gemas se queda; _restaurar_vista lo deshace). Tras cada zoom o
         arrastre se vuelve a capturar y detectar."""
-        self.mi_sistema()
-        self._modo("2d")
+        # ya en el 2D del sistema (se ve el sol): sin mi_sistema() ni cambio de modo
+        from tareas.ballenas.deteccion import centro_sol_2d
+        if centro_sol_2d(self.ctrl.capture()) is None:
+            self.mi_sistema()
+            self._modo("2d")
+        self._pequenas = False
         n = self._contar_gemas()
-        if not n and self._zoom_mapa(False):
+        if not n and self._zoom_mapa(False):             # zoom medio: iconos legibles
+            n = self._contar_gemas()
+        if not n and self._zoom_neto < 0 and self._zoom_mapa(False):
+            self._pequenas = True            # sistema entero: tambien las gemas sueltas fuera del anillo
             n = self._contar_gemas()
         if not n and getattr(self.ctrl, "style", "drag") != "click":   # «click»: sin arrastre
             for de, a in self.ZONAS_MAPA:
@@ -333,9 +433,12 @@ class _Recoger:
         deshace a ciegas), recentra siempre con mi_sistema(forzar=True)."""
         movida = self._arrastre or self._zoom_neto != 0
         self._arrastre = False
+        self._pequenas = False
         self._zoom_normal()
         if movida:
-            self.mi_sistema(forzar=True)
+            # en 2D basta centrar el mapa en el sol (rapido); mi_sistema tarda ~30 s
+            if not (self.vista == "2d" and self._centrar_sol_2d()):
+                self.mi_sistema(forzar=True)
 
     def _zoom_3d(self) -> bool:
         """Vista con zoom (3D) donde murio la ballena: desde la vista del
@@ -362,6 +465,8 @@ class _Recoger:
             n = self._ver_gemas_2d()
             if n:
                 hechas = self.recoger_gemas(min(self.robots, n), radio=False)
+                if hechas < self.robots:                # quedan drones: gemas fuera de esta vista
+                    hechas += self._barrido_2d(self.robots - hechas)
                 self.log(f"Gemas del sistema: veo {n}, mando drones a {hechas}.")
             else:
                 self._restaurar_vista()
@@ -375,8 +480,8 @@ class _Recoger:
         finally:
             self.status["recogidas"] += hechas
             self._restaurar_vista()
-            self.mi_sistema()
-            self._modo("3d")
+            self._ir_al_sistema()
+            self._modo(self.vista)
         return hechas
 
     def _gemas_cerca2d(self, img, radio: bool = False):
@@ -384,7 +489,7 @@ class _Recoger:
         todas las de la vista (aparecen por todo el mapa); radio=True limita a
         RADIO_GEMAS alrededor del centro."""
         h, w = img.shape[:2]
-        cand = gemas_2d(img)
+        cand = gemas_2d(img, pequenas=self._pequenas)
         try:
             from vision import percepcion
             esc = percepcion.ver(img)

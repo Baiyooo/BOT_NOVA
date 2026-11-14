@@ -55,7 +55,7 @@ COMO USARLO
   eliges su tarea, el limite y le das a EMPEZAR. Cada instancia
   trabaja en paralelo con las demas.
 
-  La ventana tiene seis pestanas:
+  La ventana tiene siete pestanas:
 
     Instancias     Las tarjetas de cada cuenta: tarea, limite, lo que
                    hace ahora, lo siguiente y los contadores de hoy.
@@ -74,7 +74,12 @@ COMO USARLO
                    va el detector (procesador o grafica, ms por
                    imagen), el lector de texto y la conexion ADB de
                    cada cuenta (con Reconectar).
-    Ajustes        Un resumen por cuenta y su boton de ajustes.
+    BlueStacks     Guia de como tiene que estar BlueStacks (resolucion
+                   1600x900, ADB activado, juego en espanol...) y una
+                   comprobacion en vivo de ADB e instancias.
+    Ajustes        Un resumen por cuenta y su boton de ajustes. En los
+                   ajustes de cada cuenta, apartado Ballenas, se elige la
+                   vista de ballenas y gemas (2D recomendada, o 3D).
 
   En cada tarjeta, ADEMAS de Empezar/Parar:
     - Pausar / Reanudar: congela esa cuenta al momento.
@@ -109,6 +114,10 @@ COMO USARLO
     Cosmomante          Lee el mapa, juega con dados remotos e imanes,
                         sube a nivel 6 y reclama las metas.
     Roaming Test        Juega el minijuego del evento Neural Roaming.
+    Recoleccion         Hace solo las tareas de recoger que marques en
+                        Ajustes > Recoleccion de la cuenta: suministros
+                        gratis, recompensas, destacamento, escombros y
+                        gemas del sistema (con la vista 2D o 3D de la cuenta).
     Simulacion          Simulacion automatica de batalla, solo si es gratis.
 
   Guarda lo que ve en %LOCALAPPDATA%\NovaBot\diag para poder revisar

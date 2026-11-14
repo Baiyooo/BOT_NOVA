@@ -98,12 +98,14 @@ def trabajo_proceso(puerto, adb, cual, partidas, opc, cola, parada, pausa=None):
                    "recompensas": recompensas.Recompensas, "eventos": eventos.RecogerEventos}[cual]
             motor = cls(ctrl, log=apunta, stop=parada)
             motor.run()
-        elif cual in ("rutina", "ballenas"):
+        elif cual in ("rutina", "ballenas", "recoleccion"):
             # «Solo ballenas» es la Rutina con solo ese paso: mismos ajustes y contador
-            clase = rutina.SoloBallenas if cual == "ballenas" else rutina.Rutina
+            clase = {"ballenas": rutina.SoloBallenas,
+                     "recoleccion": rutina.SoloRecoleccion}.get(cual, rutina.Rutina)
             motor = clase(ctrl, log=apunta, stop=parada,
                               normales=opc["normales"], usar_salto=opc["salto"],
-                              que=opc.get("que"), ballenas_dia=opc.get("ballenas_dia", 2),
+                              que=opc.get("recoleccion") if cual == "recoleccion" else opc.get("que"),
+                              ballenas_dia=opc.get("ballenas_dia", 2),
                               ballenas=opc.get("ballenas"),
                               roaming_tickets=opc.get("roaming_tickets", 0),
                               horario=opc.get("horario"))

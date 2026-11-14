@@ -88,6 +88,8 @@ class Rutina:
         self.b_grupo, self.b_reparar, self.b_gemas = b["grupo"], b["reparar"], b["gemas"]
         self.b_escombros = b["escombros"]
         self.b_minimos = _cb.minimos_unidades(b)     # minimo de mineral / cristal / aleacion
+        #  vista del sistema para detectar ballenas y gemas de ESTA cuenta (Ajustes > Ballenas)
+        self.vista = b["vista"]
         self._ocr = None
         self._leido_sesion = False
         self._pausa: dict = {}
@@ -156,7 +158,8 @@ class Rutina:
         return {"lider": lider, "apoyo": apoyo, "robots": self.b_robots,
                 "sola": self.b_rol == "sola", "preparar_grupo": self.b_grupo,
                 "reparar": self.b_reparar, "con_gemas": self.b_gemas,
-                "con_escombros": self.b_escombros, "minimos": self.b_minimos}
+                "con_escombros": self.b_escombros, "minimos": self.b_minimos,
+                "vista": self.vista}
 
     def _gemas_pedidas(self, est) -> bool:
         """Orden de recoger las gemas del sistema (ballenas/gemas.json, con su
@@ -834,3 +837,45 @@ def _plan_proximo_dia(hora=2) -> float:
     t = time.localtime()
     base = time.mktime((t.tm_year, t.tm_mon, t.tm_mday, hora, 0, 0, 0, 0, -1))
     return base if base > time.time() else base + 86400
+
+
+class SoloRecoleccion(Rutina):
+    """Tarea unica «Recolección»: la Rutina con SOLO las tareas de recoger que se han
+    marcado en Ajustes > Recolección de la cuenta (como en la Rutina automatica, pero
+    con su propio juego de casillas): suministros gratis, recompensas de eventos y
+    diarias, destacamento, escombros del sistema y gemas del sistema.
+
+    Las gemas las recoge Ballenas.recoger_sueltas con la vista de la cuenta (2D o 3D)
+    cada CADA_GEMAS segundos si hay algun dron libre (o cuando se pide a mano)."""
+    NOMBRE = "Recolección"
+    COLECCION = ("gratis", "eventos", "recompensas", "destacamento", "escombros", "gemas")
+    CADA_GEMAS = 5 * 60
+
+    def __init__(self, ctrl, *a, **kw):
+        super().__init__(ctrl, *a, **kw)
+        # solo cuentan las casillas que se pasan marcadas (Ajustes > Recolección): la Rutina
+        # rellena las que faltan con sus valores por defecto y aqui no deben colarse
+        marcadas = kw.get("que") or {}
+        self._elegidas = {k for k in self.COLECCION if marcadas.get(k)}
+        self.recoger_gemas = "gemas" in self._elegidas
+        self.que = {k: k in self._elegidas for k in self.PASOS}
+        self.que["gemas"] = False                 # las gemas van por _gemas_pedidas (vista de la cuenta)
+        # sin «Recompensas de eventos» no hace falta leer los eventos (ahorra minutos)
+        self._leido_sesion = "eventos" not in self._elegidas
+
+    def _gemas_pedidas(self, est) -> bool:
+        """Gemas: por orden manual (Mas > Recoger gemas) o cada CADA_GEMAS con algun dron libre."""
+        if not self.recoger_gemas:
+            return False
+        if super()._gemas_pedidas(est):
+            return True
+        if time.time() - est.get("gemas_t", 0) < self.CADA_GEMAS:
+            return False
+        return drones_libres(getattr(self.ctrl, "name", "inst"), self.b_robots) > 0
+
+    def _decidir(self, est):
+        acciones = super()._decidir(est)
+        permitidas = set(self._elegidas)
+        if "eventos" in self._elegidas:
+            permitidas.add("leer_eventos")
+        return [a for a in acciones if a.clave in permitidas]
